@@ -144,9 +144,10 @@ def create_cluster_of_points( points: list[ lp.Point ], nb_continents: int ) -> 
 
 #
 def terrain_generator(
-        nb_continents: int = 4,
+        nb_continents: int = 10,
         tx: int = 2048,
-        ty: int = 2048
+        ty: int = 2048,
+        treshold_point_continent_distance: float = 100
     ) -> None:
 
     #
@@ -157,6 +158,17 @@ def terrain_generator(
 
     #
     print(f"Continents created: {len(continents_points)}")
+
+    #
+    # TODO: Add mountains, rivers, lakes, lands to continents. (rivers must have ).
+
+    # TODO: Add cities to continents.
+
+    # TODO: Create countries from cities / favorise natural countries borders like mountains chains or rivers.
+
+    # TODO: Create Buildings for each city.
+
+    # TODO: Create people for each city / country.
 
 
 #
