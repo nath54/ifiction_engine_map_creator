@@ -1,0 +1,166 @@
+#
+### Import Modules. ###
+#
+import random
+#
+from tqdm import tqdm
+#
+import lib_points as lp
+
+
+#
+def generate_continent_points(
+        nb_continents: int = 4,
+        tx: int = 2048,
+        ty: int = 2048
+    ) -> list[ lp.Point ]:
+
+    #
+    points: list[ lp.Point ] = []
+
+    #
+    for _continent_id in range(nb_continents):
+
+        #
+        print(f"Continent : {_continent_id + 1} / {nb_continents}")
+
+        #
+        continent_center_x = random.randint(0, tx-1)
+        continent_center_y = random.randint(0, ty-1)
+
+        #
+        continent_superficy = random.randint(10, 100)
+
+        #
+        base_tots: int = 1
+
+        #
+        points.append( lp.Point(x=continent_center_x, y=continent_center_y, param1=1) )
+
+        #
+        for _ in tqdm(range(continent_superficy)):
+
+            #
+            base_c_pt_id: int = 0
+
+            #
+            base_tire: int = random.randint(0, base_tots)
+            #
+            crt_base: int = 0
+            #
+            for base_id, base_pt in enumerate(points):
+                #
+                crt_base += base_pt.param1
+                #
+                if base_tire <= crt_base:
+                    #
+                    base_c_pt_id = base_id
+
+            #
+            points[base_c_pt_id].param1 += 1
+            base_tots += 1
+
+            #
+            dist: int = 40
+
+            #
+            new_px: int = max(0, min(tx, points[base_c_pt_id].x + random.randint(-dist, dist)))
+            new_py: int = max(0, min(ty, points[base_c_pt_id].y + random.randint(-dist, dist)))
+
+            #
+            points.append( lp.Point(x=new_px, y=new_py, param1=0) )
+
+    #
+    return points
+
+
+#
+def create_cluster_of_points( points: list[ lp.Point ], nb_continents: int ) -> list[ lp.PointCluster ]:
+
+    #
+    avg_points_per_clusters: int = int( len(points) / nb_continents )
+
+    #
+    continents_points: list[ lp.PointCluster ] = []
+
+    #
+    continent_distance_threshold: float = 100.0
+
+    #
+    print(f"Distribute all the {len(points)} points in continents.")
+    #
+    p: lp.Point
+    #
+    for p in tqdm( points ):
+
+        #
+        ### Try to find the continent id to add the point to. ###
+        #
+        closest_continent_id: int = -1
+        closest_continent_distance: float = float("inf")
+
+        #
+        cid: int
+        cpts: lp.PointCluster
+        #
+        for cid, cpts in enumerate( continents_points ):
+
+            #
+            dist_to_continent: float = cpts.distance_from_point( point=p )
+
+            #
+            if dist_to_continent < closest_continent_distance:
+
+                #
+                closest_continent_id = cid
+                closest_continent_distance = dist_to_continent
+
+        #
+        ### If not continents close enough from current point. ###
+        #
+        if closest_continent_id == -1 or closest_continent_distance >= continent_distance_threshold:
+
+            #
+            ### Create a new cluster of points for a new continent. ###
+            #
+            continents_points.append(
+                lp.PointCluster(init_size=avg_points_per_clusters)
+            )
+
+            #
+            continents_points[-1].append( value=p )
+
+        #
+        ### If a continent has been found. ###
+        #
+        else:
+
+            #
+            continents_points[closest_continent_id].append( value=p )
+
+    #
+    return continents_points
+
+
+#
+def terrain_generator(
+        nb_continents: int = 4,
+        tx: int = 2048,
+        ty: int = 2048
+    ) -> None:
+
+    #
+    points: list[ lp.Point ] = generate_continent_points(nb_continents=nb_continents, tx=tx, ty=ty)
+
+    #
+    continents_points: list[ lp.PointCluster ] = create_cluster_of_points( points=points, nb_continents=nb_continents )
+
+    #
+    print(f"Continents created: {len(continents_points)}")
+
+
+#
+if __name__ == "__main__":
+
+    #
+    terrain_generator()
