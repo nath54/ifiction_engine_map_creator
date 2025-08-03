@@ -6,13 +6,18 @@ import random
 from tqdm import tqdm
 #
 import lib_points as lp
+import lib_display as ld
 
 
 #
 def generate_continent_points(
         nb_continents: int = 4,
         tx: int = 2048,
-        ty: int = 2048
+        ty: int = 2048,
+        continent_superficy_min: int = 10,
+        continent_superficy_max: int = 100,
+        dist_between_points: int = 40,
+        border_margin: int = 300
     ) -> list[ lp.Point ]:
 
     #
@@ -25,11 +30,11 @@ def generate_continent_points(
         print(f"Continent : {_continent_id + 1} / {nb_continents}")
 
         #
-        continent_center_x = random.randint(0, tx-1)
-        continent_center_y = random.randint(0, ty-1)
+        continent_center_x = random.randint(border_margin, tx-1-border_margin)
+        continent_center_y = random.randint(border_margin, ty-1-border_margin)
 
         #
-        continent_superficy = random.randint(10, 100)
+        continent_superficy = random.randint(continent_superficy_min, continent_superficy_max)
 
         #
         base_tots: int = 1
@@ -61,11 +66,17 @@ def generate_continent_points(
             base_tots += 1
 
             #
-            dist: int = 40
+            new_px: int = max(0, min(tx, points[base_c_pt_id].x + random.randint(-dist_between_points, dist_between_points)))
+            new_py: int = max(0, min(ty, points[base_c_pt_id].y + random.randint(-dist_between_points, dist_between_points)))
 
             #
-            new_px: int = max(0, min(tx, points[base_c_pt_id].x + random.randint(-dist, dist)))
-            new_py: int = max(0, min(ty, points[base_c_pt_id].y + random.randint(-dist, dist)))
+            ### Reduce the probability of inside border margin. ###
+            #
+            if new_px < border_margin or new_px > tx - border_margin or new_py < border_margin or new_py > ty - border_margin:
+
+                #
+                new_px = max(0, min(tx, points[base_c_pt_id].x + random.randint(-dist_between_points, dist_between_points)))
+                new_py = max(0, min(ty, points[base_c_pt_id].y + random.randint(-dist_between_points, dist_between_points)))
 
             #
             points.append( lp.Point(x=new_px, y=new_py, param1=0) )
@@ -75,16 +86,17 @@ def generate_continent_points(
 
 
 #
-def create_cluster_of_points( points: list[ lp.Point ], nb_continents: int ) -> list[ lp.PointCluster ]:
+def create_cluster_of_points(
+        points: list[ lp.Point ],
+        nb_continents: int,
+        treshold_point_continent_distance: float = 100
+    ) -> list[ lp.PointCluster ]:
 
     #
     avg_points_per_clusters: int = int( len(points) / nb_continents )
 
     #
     continents_points: list[ lp.PointCluster ] = []
-
-    #
-    continent_distance_threshold: float = 100.0
 
     #
     print(f"Distribute all the {len(points)} points in continents.")
@@ -118,7 +130,7 @@ def create_cluster_of_points( points: list[ lp.Point ], nb_continents: int ) -> 
         #
         ### If not continents close enough from current point. ###
         #
-        if closest_continent_id == -1 or closest_continent_distance >= continent_distance_threshold:
+        if closest_continent_id == -1 or closest_continent_distance >= treshold_point_continent_distance:
 
             #
             ### Create a new cluster of points for a new continent. ###
@@ -144,23 +156,42 @@ def create_cluster_of_points( points: list[ lp.Point ], nb_continents: int ) -> 
 
 #
 def terrain_generator(
-        nb_continents: int = 10,
         tx: int = 2048,
         ty: int = 2048,
-        treshold_point_continent_distance: float = 100
+        nb_continents: int = 4,
+        continent_superficy_min: int = 100,
+        continent_superficy_max: int = 1000,
+        dist_between_points: int = 20,
+        treshold_point_continent_distance: float = 200,
+        border_margin: int = 300
     ) -> None:
 
     #
-    points: list[ lp.Point ] = generate_continent_points(nb_continents=nb_continents, tx=tx, ty=ty)
+    points: list[ lp.Point ] = generate_continent_points(
+        nb_continents=nb_continents,
+        tx=tx,
+        ty=ty,
+        continent_superficy_min=continent_superficy_min,
+        continent_superficy_max=continent_superficy_max,
+        dist_between_points=dist_between_points,
+        border_margin=border_margin,
+    )
 
     #
-    continents_points: list[ lp.PointCluster ] = create_cluster_of_points( points=points, nb_continents=nb_continents )
+    continents_points: list[ lp.PointCluster ] = create_cluster_of_points(
+        points=points,
+        nb_continents=nb_continents,
+        treshold_point_continent_distance=treshold_point_continent_distance
+    )
 
     #
     print(f"Continents created: {len(continents_points)}")
 
     #
-    # TODO: Add mountains, rivers, lakes, lands to continents. (rivers must have ).
+    ld.render_points_with_colors(tx=tx, ty=ty, point_clusters=continents_points, colors=ld.generate_random_colors(len(continents_points)))
+
+    #
+    # TODO: Add mountains, rivers, lakes, lands to continents. (rivers must have branches, and etc...). Separate ocean from continents.
 
     # TODO: Add cities to continents.
 
