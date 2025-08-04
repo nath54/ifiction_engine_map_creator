@@ -277,7 +277,7 @@ class PointCluster:
     #
     ### Init function. Constructor. ###
     #
-    def __init__(self, init_size: int) -> None:
+    def __init__(self, init_size: int, capacity_increase_factor: float = 2.0) -> None:
 
         #
         self.data: NDArray[point_type] = np.zeros( (init_size, 3), dtype=point_type )
@@ -286,7 +286,7 @@ class PointCluster:
         self.length: int = 0
         self.capacity: int = init_size
         #
-        self.capacity_increase_factor: float = 2.0
+        self.capacity_increase_factor: float = capacity_increase_factor
 
 
     #
@@ -634,3 +634,358 @@ class PointCluster:
         #
         return np.sqrt(np.min(squared_distances))
 
+
+#
+### Class to represent a large area of points. ###
+#
+class LargePointsAreas:
+
+    #
+    ### Init function. Constructor. ###
+    #
+    def __init__(self, sub_cluster_size: int = 100) -> None:
+
+        #
+        self.sub_cluster_size: int = sub_cluster_size
+
+        #
+        self.sub_clusters: dict[str, PointCluster] = {}
+
+        #
+        self.length: int = 0
+
+
+    #
+    ### Point to key function. ###
+    #
+    def point_to_key(self, p: Point) -> str:
+
+        #
+        sx: int = int(p.x // self.sub_cluster_size)
+        sy: int = int(p.y // self.sub_cluster_size)
+
+        #
+        return f"{sx}_{sy}"
+
+
+    #
+    ### Sub cluster key and neighbours function. ###
+    #
+    def sub_cluster_key_and_neighbours(self, p: Point) -> list[str]:
+
+        #
+        lst: list[str] = []
+
+        #
+        sx: int = int(p.x // self.sub_cluster_size)
+        sy: int = int(p.y // self.sub_cluster_size)
+
+        #
+        for dx in [-1, 0, 1]:
+            #
+            for dy in [-1, 0, 1]:
+                #
+                lst.append( f"{sx+dx}_{sy+dy}" )
+
+        #
+        return lst
+
+
+    #
+    ### append function. ###
+    #
+    def append(self, value: object) -> None:
+
+        #
+        ### Type check. ###
+        #
+        if not isinstance(value, Point):
+            #
+            raise TypeError("Can only append a Point object")
+
+        #
+        ### Get subcluster key. ###
+        #
+        cluster_key: str = self.point_to_key( p = value)
+
+        #
+        ### Check for cluster existance. ###
+        #
+        if cluster_key not in self.sub_clusters:
+
+            #
+            ### Create sub cluster if not exists. ###
+            #
+            self.sub_clusters[ cluster_key ] = PointCluster( init_size = 8, capacity_increase_factor = 2 )
+
+        #
+        ### Add point to sub cluster. ###
+        #
+        self.sub_clusters[ cluster_key ].append( value=value )
+
+        #
+        ### Increase length. ###
+        #
+        self.length += 1
+
+
+    #
+    ### __contains__ function. ###
+    #
+    def __contains__(self, item: Point) -> bool:
+
+        #
+        if not isinstance(item, Point):
+            #
+            return False
+
+        #
+        ### Get subcluster key. ###
+        #
+        cluster_key: str = self.point_to_key( p = item )
+
+        #
+        ### Check for cluster existance. ###
+        #
+        if cluster_key not in self.sub_clusters:
+
+            #
+            return False
+
+        #
+        ### Check if any row in the cluster data matches the item's data. ###
+        #
+        return self.sub_clusters[ cluster_key ].__contains__( item = item )
+
+
+    #
+    ### __iter__ function. ###
+    #
+    def __iter__(self) -> 'LargePointsAreas':
+
+        #
+        self._current_sub_clusters_keys: list[str] = list( self.sub_clusters )
+        self._current_index = 0
+        self._current_nb_clusters_keys: int = len(self._current_sub_clusters_keys)
+
+        #
+        if self._current_nb_clusters_keys > 0:
+
+            #
+            self.sub_clusters[ self._current_sub_clusters_keys[self._current_index] ].__iter__()
+
+        #
+        return self
+
+
+    #
+    ### __next__ function. ###
+    #
+    def __next__(self) -> Point:
+
+        #
+        if self._current_index < self._current_nb_clusters_keys:
+
+            #
+            try:
+
+                #
+                return self.sub_clusters[ self._current_sub_clusters_keys[self._current_index] ].__next__()
+
+            #
+            except StopIteration:
+
+                #
+                self._current_index += 1
+
+                #
+                if self._current_index < self._current_nb_clusters_keys:
+
+                    #
+                    self.sub_clusters[ self._current_sub_clusters_keys[self._current_index] ].__iter__()
+
+                    #
+                    return self.__next__()
+
+        #
+        raise StopIteration
+
+
+    #
+    ### __add__ function. ###
+    #
+    def __add__(self, other: 'LargePointsAreas') -> 'LargePointsAreas':
+
+        #
+        if not isinstance(other, LargePointsAreas):  # type: ignore
+            #
+            return NotImplemented
+
+        #
+        new_sub_cluster_size: int = self.sub_cluster_size
+
+        #
+        new_points_areas: LargePointsAreas = LargePointsAreas( sub_cluster_size=new_sub_cluster_size )
+
+        #
+        if other.sub_cluster_size == new_sub_cluster_size:
+
+            #
+            sub_cluster_keys: list[str] = list( set( list( self.sub_clusters.keys() ) + list( other.sub_clusters.keys() ) ) )
+
+            #
+            ### Adding all sub clusters to the new cluster. ###
+            #
+            for key in sub_cluster_keys:
+
+                #
+                ss: list[ PointCluster ] = []
+
+                #
+                ### Getting the sub clusters. ###
+                #
+                if key in self.sub_clusters:
+                    #
+                    ss.append( self.sub_clusters[key] )
+                #
+                if key in other.sub_clusters:
+                    #
+                    ss.append( other.sub_clusters[key] )
+
+                #
+                ### Adding the sub clusters to the new points areas. ###
+                #
+                if len( ss ) == 2:
+                    #
+                    new_points_areas.sub_clusters[ key ] = ss[0].__add__( ss[1] )
+                #
+                else:
+                    #
+                    new_points_areas.sub_clusters[ key ] = ss[0]
+
+        #
+        else:
+
+            #
+            for key in self.sub_clusters.keys():
+
+                #
+                new_points_areas.sub_clusters[ key ] = self.sub_clusters[ key ]
+
+            #
+            for point in iter( other ):
+
+                #
+                new_points_areas.append( point )
+
+        #
+        new_points_areas.length = self.length + other.length
+
+        #
+        return new_points_areas
+
+
+    #
+    ### Function that calculate the minimum distance between a point and a cluster of points. ###
+    #
+    def distance_from_point(self, point: Point, max_sub_clusters_radius_search: int = 8) -> float:
+
+        #
+        ### . ###
+        #
+        if self.length == 0:
+            #
+            return float("inf")
+
+        #
+        ### . ###
+        #
+        keys_to_test: list[str] = self.sub_cluster_key_and_neighbours( p = point )
+
+        #
+        min_dist: float = float("inf")
+        good: bool = False
+
+        #
+        ### . ###
+        #
+        for key in keys_to_test:
+
+            #
+            if key in self.sub_clusters:
+
+                #
+                dist: float = self.sub_clusters[key].distance_from_point( point=point )
+
+                #
+                if dist < min_dist:
+
+                    #
+                    min_dist = dist
+
+                    #
+                    good = True
+
+        #
+        if good:
+            #
+            return min_dist
+
+        #
+        ### . ###
+        #
+        sx: int = int(point.x // self.sub_cluster_size)
+        sy: int = int(point.y // self.sub_cluster_size)
+
+        #
+        radius: int = 1
+
+        #
+        while not good and radius < max_sub_clusters_radius_search:
+
+            #
+            radius += 1
+
+            #
+            ### . ###
+            #
+            nkeys_to_test: set[str] = set()
+
+            #
+            for nx in range(sx-radius, sx+radius):
+
+                #
+                nkeys_to_test.add( f"{nx}_{sy-radius}" )
+                nkeys_to_test.add( f"{nx}_{sy+radius}" )
+
+            #
+            for ny in range(sy-radius, sy+radius):
+
+                #
+                nkeys_to_test.add( f"{sx-radius}_{ny}" )
+                nkeys_to_test.add( f"{sx+radius}_{ny}" )
+
+            #
+            ### . ###
+            #
+            for key in nkeys_to_test:
+
+                #
+                if key in self.sub_clusters:
+
+                    #
+                    dist: float = self.sub_clusters[key].distance_from_point( point=point )
+
+                    #
+                    if dist < min_dist:
+
+                        #
+                        min_dist = dist
+
+                        #
+                        good = True
+
+        #
+        ### . ###
+        #
+        return min_dist

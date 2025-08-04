@@ -90,13 +90,10 @@ def create_cluster_of_points(
         points: list[ lp.Point ],
         nb_continents: int,
         treshold_point_continent_distance: float = 100
-    ) -> list[ lp.PointCluster ]:
+    ) -> list[ lp.LargePointsAreas ]:
 
     #
-    avg_points_per_clusters: int = int( len(points) / nb_continents )
-
-    #
-    continents_points: list[ lp.PointCluster ] = []
+    continents_points: list[ lp.LargePointsAreas ] = []
 
     #
     print(f"Distribute all the {len(points)} points in continents.")
@@ -113,7 +110,7 @@ def create_cluster_of_points(
 
         #
         cid: int
-        cpts: lp.PointCluster
+        cpts: lp.LargePointsAreas
         #
         for cid, cpts in enumerate( continents_points ):
 
@@ -136,7 +133,7 @@ def create_cluster_of_points(
             ### Create a new cluster of points for a new continent. ###
             #
             continents_points.append(
-                lp.PointCluster(init_size=avg_points_per_clusters)
+                lp.LargePointsAreas()
             )
 
             #
@@ -178,7 +175,7 @@ def terrain_generator(
     )
 
     #
-    continents_points: list[ lp.PointCluster ] = create_cluster_of_points(
+    continents_points: list[ lp.LargePointsAreas ] = create_cluster_of_points(
         points=points,
         nb_continents=nb_continents,
         treshold_point_continent_distance=treshold_point_continent_distance
@@ -188,9 +185,11 @@ def terrain_generator(
     print(f"Continents created: {len(continents_points)}")
 
     #
-    ld.render_points_with_colors(tx=tx, ty=ty, point_clusters=continents_points, colors=ld.generate_random_colors(len(continents_points)))
+    ld.render_points_with_colors_from_points_areas(tx=tx, ty=ty, point_clusters=continents_points, colors=ld.generate_random_colors(len(continents_points)))
 
     #
+    # TODO: calculate "border" points.
+
     # TODO: Add mountains, rivers, lakes, lands to continents. (rivers must have branches, and etc...). Separate ocean from continents.
 
     # TODO: Add cities to continents.
