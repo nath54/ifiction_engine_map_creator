@@ -268,6 +268,83 @@ class Point:
         self.data[2] = value
 
 
+    #
+    ### Calculate angle with another point. ###
+    #
+    def calculate_angle(self, p: "Point") -> float:
+
+        #
+        if self.x == p.x:
+
+            #
+            if self.y == p.y:  return 0.0
+
+            #
+            if self.y < p.y:  return 180.0
+
+            #
+            return 0.0
+
+        #
+        if self.y == p.y:
+
+            #
+            if self.x < p.x:  return 90.0
+
+            #
+            return 270.0
+
+        #
+        dx: float
+        dy: float
+
+        #
+        if self.x > p.x:
+
+            #
+            dx = self.x - p.x
+
+            #
+            if self.y > p.y:  # Quadrant 2
+
+                #
+                dy = self.y - p.y
+
+                #
+                return 90.0 - ( np.atan( dy / dx ) * 180.0 / np.pi )
+
+            #
+            else:  # Quandrant 1
+
+                #
+                dy = p.y - self.y
+
+                #
+                return 90.0 + ( np.atan( dy / dx ) * 180.0 / np.pi )
+
+        #
+        dx = p.x - self.x
+
+        #
+        if self.y > p.y:  # Quandrant 3
+
+            #
+            dy = self.y - p.y
+
+            #
+            return 270.0 - ( np.atan( dy / dx ) * 180.0 / np.pi )
+
+        # Quadrant 4
+
+        #
+        dy = p.y - self.y
+
+        #
+        return 270.0 + ( np.atan( dy / dx ) * 180.0 / np.pi )
+
+
+
+
 #
 ### Class to represent a cluster of points. ###
 #
