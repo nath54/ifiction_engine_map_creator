@@ -105,8 +105,7 @@ def create_cluster_of_points(
         #
         ### Try to find the continent id to add the point to. ###
         #
-        closest_continent_id: int = -1
-        closest_continent_distance: float = float("inf")
+        continents_distances: list[ tuple[int, float] ] = []
 
         #
         cid: int
@@ -118,16 +117,15 @@ def create_cluster_of_points(
             dist_to_continent: float = cpts.distance_from_point( point=p )
 
             #
-            if dist_to_continent < closest_continent_distance:
+            if dist_to_continent < treshold_point_continent_distance:
 
                 #
-                closest_continent_id = cid
-                closest_continent_distance = dist_to_continent
+                continents_distances.append( (cid, dist_to_continent) )
 
         #
         ### If not continents close enough from current point. ###
         #
-        if closest_continent_id == -1 or closest_continent_distance >= treshold_point_continent_distance:
+        if len( continents_distances ) == 0:
 
             #
             ### Create a new cluster of points for a new continent. ###
@@ -140,13 +138,49 @@ def create_cluster_of_points(
             continents_points[-1].append( value=p )
 
         #
-        ### If a continent has been found. ###
+        ### If ONE continent has been found. ###
+        #
+        elif len(continents_distances) == 1:
+
+            #
+            continents_points[continents_distances[0][0]].append( value=p )
+
+        #
+        ### MULTIPLE continents to merge. ###
         #
         else:
 
             #
-            continents_points[closest_continent_id].append( value=p )
+            ### Sort the continents cluster index to inverse growing order so we will be able to pop without shifting. ###
+            #
+            continents_distances.sort( key = lambda x: x[0], reverse=True )
 
+            #
+            ### MERGE all the continents to merge. ###
+            #
+            new_continent: lp.LargePointsAreas = continents_points[continents_distances[0][0]].__add__( continents_points[continents_distances[1][0]] )
+
+            #
+            for cdts in continents_distances[2:]:
+
+                #
+                new_continent = new_continent.__add__( continents_points[cdts[0]] )
+
+            #
+            ### Removing all the previous continents. ###
+            #
+            for cdts in continents_distances:
+
+                #
+                continents_points.pop( cdts[0] )
+
+            #
+            ### Adding the new final continent. ###
+            #
+            continents_points.append( new_continent )
+
+    #
+    ### . ###
     #
     return continents_points
 
@@ -159,7 +193,7 @@ def terrain_generator(
         continent_superficy_min: int = 100,
         continent_superficy_max: int = 1000,
         dist_between_points: int = 20,
-        treshold_point_continent_distance: float = 200,
+        treshold_point_continent_distance: float = 100,
         border_margin: int = 300
     ) -> None:
 
