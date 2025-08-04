@@ -989,3 +989,46 @@ class LargePointsAreas:
         ### . ###
         #
         return min_dist
+
+
+    #
+    ### Function to get all points. ###
+    #
+    def get_all_points(self) -> NDArray[point_type]:
+
+        #
+        all_points: NDArray[point_type] = np.zeros( shape=(self.length, 2), dtype=point_type )
+
+        #
+        i: int = 0
+
+        #
+        for sbclstr in self.sub_clusters.values():
+
+            #
+            l: int = sbclstr.length
+
+            #
+            all_points[i:i+l, :] = sbclstr.data[:l, :2]
+
+            #
+            i += l
+
+        #
+        return all_points
+
+
+    #
+    ### Function to get separate coordinates list for all points. ###
+    #
+    def get_separate_coordinates_for_all_points(self) -> tuple[ list[int], list[int] ]:
+
+        #
+        all_points: NDArray[point_type] = self.get_all_points()
+
+        #
+        x_coords: list[int] = all_points[:, 0].tolist()  # type: ignore
+        y_coords: list[int] = all_points[:, 1].tolist()  # type: ignore
+
+        #
+        return x_coords, y_coords
