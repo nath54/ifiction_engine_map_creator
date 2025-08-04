@@ -3,8 +3,31 @@
 #
 from typing import Optional, Any, Callable
 #
+from math import ceil
+#
 import numpy as np
 from numpy.typing import NDArray
+#
+from tqdm import tqdm
+
+
+#
+### Clamp method. ###
+#
+def clamp(value: Any, minimum: Any, maximum: Any) -> Any:
+
+    #
+    if value < minimum:
+        #
+        return minimum
+
+    #
+    if value > maximum:
+        #
+        return maximum
+
+    #
+    return value
 
 
 #
@@ -13,6 +36,11 @@ from numpy.typing import NDArray
 point_type = np.int32  # Coordinates in a 2D grid, so integers for now.
 #
 distance_type = np.float32  # Distances between points.
+
+#
+###
+#
+NB_PTS_PARAMS: int = 2
 
 #
 ### Default values for magic_methods_to_delegate. ###
@@ -164,7 +192,7 @@ class Point:
     #
     ### Init function. Constructor. ###
     #
-    def __init__(self, x: int = 0, y: int = 0, param1: int = 0, from_data: Optional[NDArray[point_type]] = None) -> None:
+    def __init__(self, x: int = 0, y: int = 0, params: list[int] = [0 for _ in range(NB_PTS_PARAMS)], from_data: Optional[NDArray[point_type]] = None) -> None:
 
         #
         self.data: NDArray[point_type]
@@ -175,7 +203,7 @@ class Point:
         #
         else:
             #
-            self.data = np.array( [x, y, param1], dtype=point_type )
+            self.data = np.array( [x, y] + params, dtype=point_type )
 
 
     #
@@ -184,7 +212,7 @@ class Point:
     def __repr__(self) -> str:
 
         #
-        return f"Point(x={self.data[0]}, y={self.data[1]}, param1={self.data[2]})"
+        return f"Point(x={self.data[0]}, y={self.data[1]}, params={self.data[2:]})"
 
 
     #
@@ -277,7 +305,7 @@ class Point:
         if self.x == p.x:
 
             #
-            if self.y == p.y:  return 0.0
+            if self.y == p.y:  return float("inf")
 
             #
             if self.y < p.y:  return 180.0
@@ -343,8 +371,6 @@ class Point:
         return 270.0 + ( np.atan( dy / dx ) * 180.0 / np.pi )
 
 
-
-
 #
 ### Class to represent a cluster of points. ###
 #
@@ -357,7 +383,7 @@ class PointCluster:
     def __init__(self, init_size: int, capacity_increase_factor: float = 2.0) -> None:
 
         #
-        self.data: NDArray[point_type] = np.zeros( (init_size, 3), dtype=point_type )
+        self.data: NDArray[point_type] = np.zeros( (init_size, 2 + NB_PTS_PARAMS), dtype=point_type )
 
         #
         self.length: int = 0
@@ -410,7 +436,7 @@ class PointCluster:
         #
         if self.length == 0:
             #
-            return np.zeros( (3, ), dtype=point_type )
+            return np.zeros( (2 + NB_PTS_PARAMS, ), dtype=point_type )
 
         #
         return np.mean( self.data, axis=-1)
@@ -439,7 +465,7 @@ class PointCluster:
             #
             ### Create a new, larger array and copy the old data. ###
             #
-            new_data = np.zeros((new_capacity, 3), dtype=point_type)
+            new_data = np.zeros((new_capacity, 2 + NB_PTS_PARAMS), dtype=point_type)
             new_data[:self.length] = self.data
             self.data = new_data
             self.capacity = new_capacity
@@ -685,19 +711,10 @@ class PointCluster:
 
 
     #
-    ### Function that calculate the minimum distance between a point and a cluster of points. ###
+    ### Function that calculate all the distances between a point and the cluster of points. ###
     #
-    def distance_from_point(self, point: Point) -> float:
+    def squared_distances_from_point(self, point: Point) -> NDArray[distance_type]:
 
-        #
-        if self.length == 0:
-            #
-            return float("inf")
-
-        #
-        ### Use broadcasting to subtract the point's x and y coordinates from the cluster's data.   ###
-        ### self.data[:self.length, :2] has shape (N, 2), and point.data[:2] has shape (2,).        ###
-        ### NumPy handles the subtraction correctly without creating an intermediate array.         ###
         #
         squared_diffs = (self.data[:self.length, :2] - point.data[:2]) ** 2
 
@@ -709,7 +726,59 @@ class PointCluster:
         #
         ### Return the square root of the minimum squared distance. ###
         #
+        return squared_distances
+
+
+    #
+    ### Function that calculate the minimum distance between a point and a cluster of points. ###
+    #
+    def distance_from_point(self, point: Point) -> float:
+
+        #
+        if self.length == 0:
+            #
+            return float("inf")
+
+        ### Sum the squared differences for each point to get the squared Euclidean distances. ###
+        #
+        squared_distances = self.squared_distances_from_point( point = point )
+
+        #
+        ### Return the square root of the minimum squared distance. ###
+        #
         return np.sqrt(np.min(squared_distances))
+
+
+    #
+    ### Function to return all the points that are inside the sphere of a certain center and radius. ###
+    #
+    def get_all_points_inside_sphere(self, center: Point, radius: float) -> list[Point]:
+
+        #
+        if self.length == 0:
+
+            #
+            return []
+
+        #
+        squared_distances: NDArray[distance_type] = self.squared_distances_from_point( point = center )
+
+        #
+        ### Calculate a mask for all the points that are < (radius ** 2). ###
+        #
+        squared_radius = radius ** 2
+        #
+        mask = squared_distances < squared_radius
+
+        #
+        ### Get the data of all of these points and return a list of points corresponding to those points. ###
+        #
+        points_inside_data = self.data[:self.length][mask]
+
+        #
+        ### Return thoses points. ###
+        #
+        return [Point(from_data=data) for data in points_inside_data]
 
 
 #
@@ -1074,7 +1143,7 @@ class LargePointsAreas:
     def get_all_points(self) -> NDArray[point_type]:
 
         #
-        all_points: NDArray[point_type] = np.zeros( shape=(self.length, 2), dtype=point_type )
+        all_points: NDArray[point_type] = np.zeros( shape=(self.length, 2 + NB_PTS_PARAMS), dtype=point_type )
 
         #
         i: int = 0
@@ -1086,7 +1155,7 @@ class LargePointsAreas:
             l: int = sbclstr.length
 
             #
-            all_points[i:i+l, :] = sbclstr.data[:l, :2]
+            all_points[i:i+l, :] = sbclstr.data[:l, :]
 
             #
             i += l
@@ -1098,7 +1167,7 @@ class LargePointsAreas:
     #
     ### Function to get separate coordinates list for all points. ###
     #
-    def get_separate_coordinates_for_all_points(self) -> tuple[ list[int], list[int] ]:
+    def get_separate_coordinates_for_all_points(self) -> tuple[ list[int], ... ]:
 
         #
         all_points: NDArray[point_type] = self.get_all_points()
@@ -1108,4 +1177,177 @@ class LargePointsAreas:
         y_coords: list[int] = all_points[:, 1].tolist()  # type: ignore
 
         #
-        return x_coords, y_coords
+        res: list[ list[int] ] = [ x_coords, y_coords ]
+
+        #
+        for i in range(NB_PTS_PARAMS):
+
+            #
+            res.append(
+                all_points[:, 2+i].tolist()  # type: ignore
+            )
+
+        #
+        return tuple( res )
+
+
+    #
+    ### Function to get all the subclusters that intersect with a certain circle. ###
+    #
+    def get_subclusters_in_radius(self, point: Point, radius: float) -> list[PointCluster]:
+
+        #
+        result_clusters: list[PointCluster] = []
+
+        #
+        center_sx: int = int( point.x / self.sub_cluster_size )
+        center_sy: int = int( point.y / self.sub_cluster_size )
+
+        #
+        max_grid_dist = ceil(radius / self.sub_cluster_size)
+
+        #
+        radius_squared: float = radius ** 2
+
+        #
+        for sx in range( center_sx - max_grid_dist, center_sx + max_grid_dist + 1 ):
+
+            #
+            for sy in range( center_sy - max_grid_dist, center_sy + max_grid_dist + 1 ):
+
+                #
+                current_key: str = f"{sx}_{sy}"
+
+                #
+                min_x: int = sx * self.sub_cluster_size
+                max_x: int = min_x + self.sub_cluster_size
+                min_y: int = sy * self.sub_cluster_size
+                max_y: int = min_y + self.sub_cluster_size
+
+                #
+                closest_x: int = clamp(point.x, min_x, max_x)
+                closest_y: int = clamp(point.y, min_y, max_y)
+
+                #
+                dist_sq: float = (closest_x - point.x) ** 2 + (closest_y - point.y) ** 2
+
+                #
+                if dist_sq <= radius_squared and current_key in self.sub_clusters:
+
+                    #
+                    result_clusters.append( self.sub_clusters[current_key] )
+
+        #
+        return result_clusters
+
+
+    #
+    ### Function to get all the points close to a point. ###
+    #
+    def get_all_points_in_circle(self, point: Point, radius: float) -> list[Point]:
+
+        #
+        res_points: list[Point] = []
+
+        #
+        subclusters: list[PointCluster] = self.get_subclusters_in_radius( point=point, radius=radius )
+
+        #
+        cluster: PointCluster
+        #
+        for cluster in subclusters:
+
+            #
+            res_points += cluster.get_all_points_inside_sphere( center=point, radius=radius )
+
+        #
+        return res_points
+
+
+    #
+    ### Set all point border. ###
+    #
+    def set_all_point_border(self, radius: float = 100, dead_angle_min: float = 160) -> None:
+
+        #
+        print("Finding all the border points...")
+        #
+        pbar = tqdm(total=self.length)
+
+        #
+        nb_border_pts: int = 0
+
+        #
+        border_points: list[Point] = []
+
+        #
+        cluster: PointCluster
+        #
+        for cluster in self.sub_clusters.values():
+
+            #
+            for i in range(cluster.length):
+
+                #
+                point: Point = Point( from_data = cluster.data[i] )
+
+                #
+                points_in_circle: list[Point] = self.get_all_points_in_circle( point=point, radius=radius )
+
+                #
+                angles: list[float] = [ point.calculate_angle(pp) for pp in points_in_circle if not (point.x == pp.x and point.y == pp.y) ]
+
+                #
+                angles.sort()
+
+                #
+                max_dist_between_angles: float = 0
+
+                #
+                nb_angles: int = len(angles)
+                #
+                for j in range( nb_angles ):
+
+                    #
+                    angle_1: float = angles[j]
+                    angle_2: float = angles[(j+1) % nb_angles]
+
+                    #
+                    if j == nb_angles - 1:
+
+                        #
+                        mini_dst = abs( (angle_2 + 360) - angle_1 )
+
+                    else:
+                        #
+                        mini_dst: float = abs( angle_2 - angle_1 )
+
+                    #
+                    if mini_dst > max_dist_between_angles:
+
+                        #
+                        max_dist_between_angles = mini_dst
+
+                #
+                # print(f"DEBUG | point {i} | max_dist_between_angles = {max_dist_between_angles}")
+
+                #
+                if max_dist_between_angles >= dead_angle_min:
+
+                    #
+                    ### Point is a border point. ###
+                    #
+                    border_points.append( point )
+                    #
+                    nb_border_pts += 1
+                    #
+                    cluster.data[i, 3] = 1  # point.param2 is if a point is a border point or not
+
+                #
+                pbar.update(n=1)
+
+        #
+        print(f"Border points found : {nb_border_pts}")
+
+
+

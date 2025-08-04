@@ -163,12 +163,33 @@ def render_points_with_colors_from_points_areas(tx: int, ty: int, point_clusters
         #
         if cluster.length > 0:
             #
-            x_coords, y_coords = cluster.get_separate_coordinates_for_all_points()
+            x_coords, y_coords, _, is_border_point = cluster.get_separate_coordinates_for_all_points()
+
+            #
+            x_coords_non_border: list[float] = []
+            y_coords_non_border: list[float] = []
+            #
+            x_coords_border: list[float] = []
+            y_coords_border: list[float] = []
+            #
+            for jj in range(len(x_coords)):
+                #
+                if is_border_point[jj] == 1:
+                    #
+                    x_coords_border.append(x_coords[jj])
+                    y_coords_border.append(y_coords[jj])
+                #
+                else:
+                    #
+                    x_coords_non_border.append(x_coords[jj])
+                    y_coords_non_border.append(y_coords[jj])
 
             #
             ### Create a scatter plot for the current cluster. ###
             #
-            plt.scatter(x_coords, y_coords, color=colors[i], label=f"Cluster {i+1}")
+            # plt.scatter(x_coords, y_coords, color=colors[i], label=f"Cluster {i+1}")
+            plt.scatter(x_coords_non_border, y_coords_non_border, marker=".", color=colors[i], label=f"Cluster {i+1}")
+            plt.scatter(x_coords_border, y_coords_border, marker="x", color=colors[i], label=f"Cluster {i+1}")
 
     #
     ### Set the title and labels. ###

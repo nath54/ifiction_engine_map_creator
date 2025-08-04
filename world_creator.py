@@ -40,7 +40,7 @@ def generate_continent_points(
         base_tots: int = 1
 
         #
-        points.append( lp.Point(x=continent_center_x, y=continent_center_y, param1=1) )
+        points.append( lp.Point(x=continent_center_x, y=continent_center_y, params=[1, 0]) )
 
         #
         for _ in tqdm(range(continent_superficy)):
@@ -79,7 +79,7 @@ def generate_continent_points(
                 new_py = max(0, min(ty, points[base_c_pt_id].y + random.randint(-dist_between_points, dist_between_points)))
 
             #
-            points.append( lp.Point(x=new_px, y=new_py, param1=0) )
+            points.append( lp.Point(x=new_px, y=new_py, params=[0, 0]) )
 
     #
     return points
@@ -194,7 +194,9 @@ def terrain_generator(
         continent_superficy_max: int = 1000,
         dist_between_points: int = 20,
         treshold_point_continent_distance: float = 100,
-        border_margin: int = 300
+        border_margin: int = 300,
+        radius_border_points: float = 120,
+        dead_angle_min_border_points: float = 80,
     ) -> None:
 
     #
@@ -217,6 +219,11 @@ def terrain_generator(
 
     #
     print(f"Continents created: {len(continents_points)}")
+
+    #
+    for cp in continents_points:
+        #
+        cp.set_all_point_border(radius=radius_border_points, dead_angle_min=dead_angle_min_border_points)
 
     #
     ld.render_points_with_colors_from_points_areas(tx=tx, ty=ty, point_clusters=continents_points, colors=ld.generate_random_colors(len(continents_points)))
