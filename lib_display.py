@@ -189,7 +189,7 @@ def render_points_with_colors_from_points_areas(tx: int, ty: int, point_clusters
             #
             # plt.scatter(x_coords, y_coords, color=colors[i], label=f"Cluster {i+1}")
             plt.scatter(x_coords_non_border, y_coords_non_border, marker=".", color=colors[i], label=f"Cluster {i+1}")
-            plt.scatter(x_coords_border, y_coords_border, marker="x", color=colors[i], label=f"Cluster {i+1}")
+            plt.scatter(x_coords_border, y_coords_border, marker="x", color="black", label=f"Cluster {i+1}")
 
     #
     ### Set the title and labels. ###

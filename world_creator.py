@@ -193,10 +193,10 @@ def terrain_generator(
         continent_superficy_min: int = 100,
         continent_superficy_max: int = 1000,
         dist_between_points: int = 20,
-        treshold_point_continent_distance: float = 100,
+        treshold_point_continent_distance: float = 60,
         border_margin: int = 300,
-        radius_border_points: float = 120,
-        dead_angle_min_border_points: float = 80,
+        radius_border_points: float = 40,
+        dead_angle_min_border_points: float = 100,
     ) -> None:
 
     #
