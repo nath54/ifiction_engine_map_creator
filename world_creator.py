@@ -197,6 +197,8 @@ def terrain_generator(
         border_margin: int = 300,
         radius_border_points: float = 40,
         dead_angle_min_border_points: float = 100,
+        radius_between_border_points: float = 10,
+        search_radius_factor: float = 0.2,
     ) -> None:
 
     #
@@ -221,12 +223,17 @@ def terrain_generator(
     print(f"Continents created: {len(continents_points)}")
 
     #
-    for cp in continents_points:
-        #
-        cp.set_all_point_border(radius=radius_border_points, dead_angle_min=dead_angle_min_border_points)
+    polygons: list[lp.Polygon] = []
 
     #
-    ld.render_points_with_colors_from_points_areas(tx=tx, ty=ty, point_clusters=continents_points, colors=ld.generate_random_colors(len(continents_points)))
+    for cp in continents_points:
+        #
+        cp.set_all_point_border(radius=radius_border_points, dead_angle_min=dead_angle_min_border_points, radius_between_border_points=radius_between_border_points)
+        #
+        polygons.append( cp.create_polygon_from_border(search_radius_factor=search_radius_factor) )
+
+    #
+    ld.render_points_with_colors_from_points_areas_with_polygons(tx=tx, ty=ty, point_clusters=continents_points, colors=ld.generate_random_colors(len(continents_points)), polygons=polygons)
 
     #
     # TODO: calculate "border" points.

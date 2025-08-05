@@ -297,6 +297,33 @@ class Point:
 
 
     #
+    ### param2 getter. ###
+    #
+    @property
+    def param2(self) -> int:
+        """Getter for the param2 value."""
+
+        #
+        return self.data[3]
+
+
+    #
+    ### param2 setter. ###
+    #
+    @param2.setter
+    def param2(self, value: int) -> None:
+        """Setter for the param2 value, with type validation."""
+
+        #
+        if not isinstance(value, int) and not isinstance(value, np.int32):  # type: ignore
+            #
+            raise TypeError(f"param2 must be an integer. Value asked to set param2 from = `{value}` of type `{type(value)}`")
+
+        #
+        self.data[3] = value
+
+
+    #
     ### Calculate angle with another point. ###
     #
     def calculate_angle(self, p: "Point") -> float:
@@ -369,6 +396,15 @@ class Point:
 
         #
         return 270.0 + ( np.atan( dy / dx ) * 180.0 / np.pi )
+
+
+    #
+    ### Calculate distance with another point. ###
+    #
+    def calculate_distance(self, p: "Point") -> float:
+
+        #
+        return np.sqrt( np.sum( ( self.data[:2] - p.data[:2] ) ** 2 ) )
 
 
 #
@@ -1267,7 +1303,7 @@ class LargePointsAreas:
     #
     ### Set all point border. ###
     #
-    def set_all_point_border(self, radius: float = 100, dead_angle_min: float = 160) -> None:
+    def set_all_point_border(self, radius: float = 100, dead_angle_min: float = 160, radius_between_border_points: float = 30) -> None:
 
         #
         print("Finding all the border points...")
@@ -1295,7 +1331,31 @@ class LargePointsAreas:
                 points_in_circle: list[Point] = self.get_all_points_in_circle( point=point, radius=radius )
 
                 #
-                angles: list[float] = [ point.calculate_angle(pp) for pp in points_in_circle if not (point.x == pp.x and point.y == pp.y) ]
+                bad_point: bool = False
+
+                #
+                angles: list[float] = []
+
+                #
+                for pp in points_in_circle:
+
+                    #
+                    if pp.data[3] and point.calculate_distance(pp) <= radius_between_border_points:
+
+                        #
+                        bad_point = True
+
+                    #
+                    if not (point.x == pp.x and point.y == pp.y):
+
+                        #
+                        angles.append( point.calculate_angle(pp) )
+
+                #
+                if bad_point:
+
+                    #
+                    continue
 
                 #
                 angles.sort()
@@ -1349,5 +1409,435 @@ class LargePointsAreas:
         #
         print(f"Border points found : {nb_border_pts}")
 
+
+    #
+    ### Helper function for angle calculation. ###
+    #
+    def _calculate_ccw_angle(self, p_prev: Point, p_current: Point, p_candidate: Point) -> float:
+        """Calculates the counter-clockwise angle of the turn at p_current."""
+        #
+        v_ref: Point = p_current - p_prev
+        v_cand: Point = p_candidate - p_current
+        #
+        angle: float = np.arctan2(v_cand.y, v_cand.x) - np.arctan2(v_ref.y, v_ref.x)
+        #
+        # Normalize to [0, 2*pi]
+        if angle < 0:
+            angle += 2 * np.pi
+        #
+        return angle
+
+
+    #
+    ### Algorithm: Spatially-Accelerated Angular Greedy Algorithm ###
+    #
+    def create_polygon_from_border(self, search_radius_factor: float = 3.0) -> 'Polygon':
+        """
+        Creates a cyclic path (polygon) from points marked as border points.
+
+        Args:
+            search_radius_factor:   Multiplier for the grid's sub_cluster_size to determine
+                                    the initial search radius for the next point.
+
+        Returns:
+            A Polygon object representing the ordered boundary.
+        """
+
+        #
+        print("Gathering border points...")
+
+        #
+        ### Step 0: Get all border points. Using a dict for O(1) lookups and removal. ###
+        #
+        unvisited_border_points: dict[Point, bool] = {
+            p: True for p in self if p.param2 == 1
+        }
+        #
+        if not unvisited_border_points:
+            #
+            print("No border points found to create a polygon.")
+            return Polygon(PointCluster(0), self)
+
+        #
+        ### Step 1: Find the starting point (lowest y, then lowest x). ###
+        #
+        p_start = min(unvisited_border_points.keys(), key=lambda p: (p.y, p.x))
+        #
+        print(f"Starting polygon construction from point: {p_start}")
+
+        #
+        ### Step 2: Initialize for the main loop. ###
+        #
+        result_polygon_cluster = PointCluster(init_size=len(unvisited_border_points))
+        result_polygon_cluster.append(p_start)
+        #
+        del unvisited_border_points[p_start]
+        #
+        p_current = p_start
+        #
+        ### Create a virtual previous point to establish a horizontal reference vector. ###
+        #
+        p_prev = Point(p_start.x - 10, p_start.y)
+
+        #
+        ### Step 3: main loop. ###
+        #
+        print("Constructing polygon path...")
+        #
+        pbar = tqdm(total=len(unvisited_border_points))
+
+        #
+        while unvisited_border_points:
+
+            #
+            ### Step 3a: Get candidate points efficiently. ###
+            #
+            search_radius = self.sub_cluster_size * search_radius_factor
+            candidate_points = []
+
+            #
+            ### Adaptive search radius. ###
+            #
+            while not candidate_points:
+
+                #
+                points_in_circle = self.get_all_points_in_circle(point=p_current, radius=search_radius)
+                #
+                candidate_points = [p for p in points_in_circle if p in unvisited_border_points]
+
+                #
+                if not candidate_points:
+
+                    #
+                    ### # Increase radius if no candidates found. ###
+                    #
+                    new_search_radius: float = search_radius * 1.5
+
+                    #
+                    if search_radius > 10 * self.sub_cluster_size or search_radius > new_search_radius:
+                        #
+                        # print("\nWarning: Search radius is very large. There might be a large gap in border points.")
+
+                        #
+                        ### If search fails, fall back to all remaining points. ###
+                        #
+                        candidate_points = list(unvisited_border_points.keys())
+                        break
+
+                    #
+                    search_radius = new_search_radius
+
+            #
+            ### Step 3b: Select the best candidate (tightest "left turn"). ###
+            #
+            best_candidate = None
+            min_angle = float('inf') # We are looking for the smallest positive angle
+
+            #
+            for cand in candidate_points:
+
+                #
+                angle = self._calculate_ccw_angle(p_prev, p_current, cand)
+
+                #
+                if angle < min_angle:
+                    #
+                    min_angle = angle
+                    best_candidate = cand
+
+            #
+            if best_candidate is None:
+                #
+                print("\nError: Could not find a next point. Aborting polygon creation.")
+                break # Should not happen if candidate_points is not empty
+
+            #
+            ### Step 3d: Advance. ###
+            #
+            p_next: Point = best_candidate  # type: ignore
+            #
+            result_polygon_cluster.append(p_next)  # type: ignore
+            #
+            del unvisited_border_points[p_next]
+            #
+            p_prev = p_current  # type: ignore
+            p_current = p_next  # type: ignore
+            #
+            pbar.update(1)
+
+            #
+            ### Step 3c: Check for loop termination. ###
+            #
+            if p_current == p_start:
+                #
+                print("\nWarning: Closed loop before visiting all points. This may indicate separate islands of border points.")
+                break
+
+        #
+        pbar.close()
+        print(f"Polygon construction complete with {len(result_polygon_cluster)} vertices.")
+
+        #
+        return Polygon(result_polygon_cluster, self)
+
+
+#
+### Class to represent a Polygon, with efficient point-in-polygon testing. ###
+#
+class Polygon:
+
+    #
+    ### Init function. Constructor. ###
+    #
+    def __init__(self, boundary: PointCluster, grid_context: LargePointsAreas):
+
+        #
+        self.boundary: PointCluster = boundary
+        self.grid_context: LargePointsAreas = grid_context
+        self.edge_grid: dict[str, list[int]] = {}
+        #
+        self.min_x: int = 0
+        self.max_x: int = 0
+        self.min_y: int = 0
+        self.max_y: int = 0
+
+        #
+        if len(self.boundary) > 0:
+            #
+            self._calculate_bounding_box()
+            self._precompute_edge_grid()
+
+
+    #
+    ### repr function. ###
+    #
+    def __repr__(self) -> str:
+        #
+        return f"Polygon(vertices={len(self.boundary)}, grid_cells_with_edges={len(self.edge_grid)})"
+
+
+    #
+    ### Calculate and store the polygon's axis-aligned bounding box. ###
+    #
+    def _calculate_bounding_box(self) -> None:
+        #
+        all_x: NDArray[point_type] = self.boundary.data[:self.boundary.length, 0]
+        all_y: NDArray[point_type] = self.boundary.data[:self.boundary.length, 1]
+        #
+        self.min_x, self.max_x = np.min(all_x).item(), np.max(all_x).item()
+        self.min_y, self.max_y = np.min(all_y).item(), np.max(all_y).item()
+
+
+    #
+    ### Pre-computation step to map grid cells to polygon edges. ###
+    #
+    def _precompute_edge_grid(self) -> None:
+        """
+        Iterates through each edge of the polygon, finds all grid cells it
+        crosses, and stores a reference to the edge in those cells.
+        """
+
+        #
+        print("Pre-computing polygon edge grid for fast lookups...")
+        #
+        for i in tqdm(range(len(self.boundary))):
+
+            #
+            p1 = self.boundary[i]
+            p2 = self.boundary[(i + 1) % len(self.boundary)] # Wrap around for the last edge
+
+            #
+            ### Use a line traversal algorithm to find all intersected grid cells. ###
+            #
+            crossed_cells = self._get_grid_cells_for_line(p1, p2)
+
+            #
+            for cell_key in crossed_cells:
+
+                #
+                if cell_key not in self.edge_grid:
+                    #
+                    self.edge_grid[cell_key] = []
+
+                #
+                self.edge_grid[cell_key].append(i)
+
+        #
+        print("Edge grid pre-computation complete.")
+
+
+    #
+    ### Digital Differential Analyzer (DDA) based algorithm to find crossed cells. ###
+    #
+    def _get_grid_cells_for_line(self, p1: Point, p2: Point) -> set[str]:
+
+        #
+        cells: set[str] = set()
+        #
+        # grid_size: int = self.grid_context.sub_cluster_size
+
+        #
+        x1: int = p1.x
+        y1: int = p1.y
+        x2: int = p2.x
+        y2: int = p2.y
+        #
+        dx: int = x2 - x1
+        dy: int = y2 - y1
+
+        #
+        steps: int = max(abs(dx), abs(dy))
+        #
+        if steps == 0:
+            #
+            key = self.grid_context.point_to_key(p1)
+            #
+            cells.add(key)
+            #
+            return cells
+
+        #
+        x_inc: float = dx / steps
+        y_inc: float = dy / steps
+        #
+        x: float = float(x1)
+        y: float = float(y1)
+
+        #
+        for _ in range(int(steps) + 1):
+
+            #
+            key = self.grid_context.point_to_key(Point(int(x), int(y)))
+            #
+            cells.add(key)
+            #
+            x += x_inc
+            y += y_inc
+
+        #
+        return cells
+
+    #
+    ### Helper for the ray casting intersection test. ###
+    #
+    def _ray_intersects_segment(self, point: Point, p1: Point, p2: Point) -> bool:
+
+        #
+        ### Assumes ray is cast horizontally to the right (positive x). ###
+        #
+
+        #
+        ### Ensure p1.y <= p2.y for consistency. ###
+        #
+        if p1.y > p2.y:
+            #
+            p1, p2 = p2, p1
+
+        #
+        ### Case 1: Point y is outside the edge's y-range. No intersection. ###
+        #
+        if point.y == p1.y or point.y > p2.y:
+            #
+            return False
+
+        #
+        ### Case 2: Point y is on the same level as the lower vertex. ###
+        ### This is a special case to avoid double counting when a ray hits a vertex. ###
+        ### We only count it if the ray is also to the left of the vertex. ###
+        #
+        if point.y == p2.y:
+            return point.x <= p2.x
+
+        #
+        ### Case 3: Edge is horizontal. Cannot intersect a horizontal ray unless co-linear. ###
+        #
+        if p1.y == p2.y:
+            return False
+
+        #
+        ### Case 4: General case. Use line equation to find intersection x. ###
+        ### Check if the point's x is to the left of the intersection point. ###
+        ### This avoids floating point issues by using cross-product. ###
+        ### (p2.y - p1.y) * (point.x - p1.x) - (p2.x - p1.x) * (point.y - p1.y) > 0 ###
+        #
+        if (p2.x - p1.x) * (point.y - p1.y) < (point.x - p1.x) * (p2.y - p1.y):
+            #
+            return True
+
+        #
+        return False
+
+
+    #
+    ### Algorithm: Grid-Accelerated Ray Casting ###
+    #
+    def __contains__(self, point: Point) -> bool:
+        """
+        Checks if a point is inside the polygon using a highly efficient
+        grid-accelerated ray casting algorithm.
+
+        Usage: `my_point in my_polygon`
+        """
+
+        #
+        if len(self.boundary) < 3:
+            #
+            return False
+
+        #
+        ### Step 1: Trivial Rejection with Bounding Box Test. ###
+        #
+        if not (self.min_x <= point.x <= self.max_x and self.min_y <= point.y <= self.max_y):
+            #
+            return False
+
+        #
+        ### Step 2: Grid-Accelerated Ray Casting. ###
+        #
+        intersections: int = 0
+
+        #
+        ### We only need to check edges that could possibly intersect our horizontal ray. ###
+        #
+        #
+        checked_edges: set[int] = set() # To avoid double-testing an edge if it's in multiple cells
+        #
+        gx_start: int = int(point.x // self.grid_context.sub_cluster_size)
+        gy: int = int(point.y // self.grid_context.sub_cluster_size)
+        gx_end: int = int(self.max_x // self.grid_context.sub_cluster_size)
+
+        #
+        gx: int
+        #
+        for gx in range(gx_start, gx_end + 1):
+
+            #
+            cell_key: str = f"{gx}_{gy}"
+            #
+            if cell_key in self.edge_grid:
+
+                #
+                for edge_index in self.edge_grid[cell_key]:
+
+                    #
+                    if edge_index in checked_edges:
+                        #
+                        continue
+
+                    #
+                    checked_edges.add(edge_index)
+                    #
+                    p1 = self.boundary[edge_index]
+                    p2 = self.boundary[(edge_index + 1) % len(self.boundary)]
+
+                    #
+                    if self._ray_intersects_segment(point, p1, p2):
+                        #
+                        intersections += 1
+
+        #
+        ### Step 3: Odd number of intersections means the point is inside. ###
+        #
+        return intersections % 2 == 1
 
 

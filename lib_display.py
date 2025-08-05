@@ -4,6 +4,8 @@
 #
 import random
 #
+import numpy as np
+#
 from matplotlib import pyplot as plt
 #
 import lib_points as lp
@@ -140,7 +142,7 @@ def render_points_from_points_areas(tx: int, ty: int, points: lp.LargePointsArea
 #
 ### Render points with colors. ###
 #
-def render_points_with_colors_from_points_areas(tx: int, ty: int, point_clusters: list[lp.LargePointsAreas], colors: list[str]) -> None:
+def render_points_with_colors_from_points_areas_with_polygons(tx: int, ty: int, point_clusters: list[lp.LargePointsAreas], colors: list[str], polygons: list[lp.Polygon]) -> None:
 
     #
     ### Check if the number of clusters matches the number of colors. ###
@@ -190,6 +192,23 @@ def render_points_with_colors_from_points_areas(tx: int, ty: int, point_clusters
             # plt.scatter(x_coords, y_coords, color=colors[i], label=f"Cluster {i+1}")
             plt.scatter(x_coords_non_border, y_coords_non_border, marker=".", color=colors[i], label=f"Cluster {i+1}")
             plt.scatter(x_coords_border, y_coords_border, marker="x", color="black", label=f"Cluster {i+1}")
+
+    #
+    ### draw polygons. ###
+    #
+    if polygons:
+        #
+        for polygon in polygons:
+            #
+            x_coords = polygon.boundary.data[:polygon.boundary.length, 0]
+            y_coords = polygon.boundary.data[:polygon.boundary.length, 1]
+            #
+            ### Close the polygon by appending the first point to the end. ###
+            #
+            x_coords = np.append(x_coords, x_coords[0])
+            y_coords = np.append(y_coords, y_coords[0])
+            #
+            plt.plot(x_coords, y_coords, color='black', linewidth=1)
 
     #
     ### Set the title and labels. ###
