@@ -1461,7 +1461,7 @@ class LargePointsAreas:
         #
         ### Step 1: Find the starting point (lowest y, then lowest x). ###
         #
-        p_start = min(unvisited_border_points.keys(), key=lambda p: (p.y, p.x))
+        p_start: Point = min(unvisited_border_points.keys(), key=lambda p: (p.y, p.x))
         #
         print(f"Starting polygon construction from point: {p_start}")
 
@@ -1473,7 +1473,7 @@ class LargePointsAreas:
         #
         del unvisited_border_points[p_start]
         #
-        p_current = p_start
+        p_current: Point = p_start
         #
         ### Create a virtual previous point to establish a horizontal reference vector. ###
         #
@@ -1514,7 +1514,7 @@ class LargePointsAreas:
                     new_search_radius: float = search_radius * 1.5
 
                     #
-                    if search_radius > 10 * self.sub_cluster_size or search_radius > new_search_radius:
+                    if search_radius > 15 * self.sub_cluster_size or search_radius > new_search_radius:
                         #
                         # print("\nWarning: Search radius is very large. There might be a large gap in border points.")
 
@@ -1530,14 +1530,19 @@ class LargePointsAreas:
             #
             ### Step 3b: Select the best candidate (tightest "left turn"). ###
             #
-            best_candidate = None
-            min_angle = float('inf') # We are looking for the smallest positive angle
+            best_candidate: Point = None
+            min_angle: float = float('inf') # We are looking for the smallest positive angle
 
+            #
+            norm_cost: float = 0.05 * self.sub_cluster_size
+
+            #
+            cand: Point
             #
             for cand in candidate_points:
 
                 #
-                angle = self._calculate_ccw_angle(p_prev, p_current, cand)
+                angle: float = self._calculate_ccw_angle(p_prev, p_current, cand) + ( p_current.calculate_distance(cand) / norm_cost )
 
                 #
                 if angle < min_angle:
