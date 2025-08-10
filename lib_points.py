@@ -1476,7 +1476,7 @@ class LargePointsAreas:
                     #
                     ### If search fails, fall back to all remaining points. ###
                     #
-                    candidate_points = list(all_border_points.keys())
+                    candidate_points = [] # list(all_border_points.keys())
                     break
 
                 #
@@ -1529,7 +1529,7 @@ class LargePointsAreas:
         #
         p: Point
         #
-        for p in tqdm( border_points ):
+        for p in tqdm( list(border_points.keys()) ):
 
             #
             neighbours_border: list[Point]
@@ -1795,7 +1795,12 @@ class LargePointsAreas:
                     np_agl: float = p.calculate_angle( np )
 
                     #
-                    score: float = default_factor_dist * neighbours_borders_and_distances[np] - default_factor_dist * min( abs(np_agl - b1_agl), abs(b1_agl - np_agl) )
+                    diff: float = min( abs(np_agl - b1_agl), abs(b1_agl - np_agl) )
+                    #
+                    diff = min(diff, 360 - diff)
+
+                    #
+                    score: float = default_factor_dist * neighbours_borders_and_distances[np] - default_factor_dist * diff
 
                     #
                     if score < mini_score:
@@ -1819,7 +1824,6 @@ class LargePointsAreas:
         #
         ### Step 5: Check for all new correct border_segments. ###
         #
-        correct_segments: dict[Point, list[Point]] = {}
 
         #
         print("Fifth pass among all border points to check new valid borders joins...")
@@ -1830,7 +1834,7 @@ class LargePointsAreas:
             for np in neighbours[0]:
 
                 #
-                for npp in border_points[np][0]:
+                for npp in still_not_connected_border_points[np][0]:
 
                     #
                     if npp == p:
@@ -1858,37 +1862,236 @@ class LargePointsAreas:
                         #
                         break
 
+
         #
         ### Step 6: check for all the non completed border points and put them in the alone islands points. ###
         #
+        # Merge validated mutual pairs from both the primary border_points dict and the still_not_connected_border_points
+        final_correct_segments: dict[Point, list[Point]] = {}
 
-        # TODO
-        pass
+        def _add_mutual(a: Point, b: Point) -> None:
+            """Add directed adjacency entry (we'll keep both directions for symmetry)."""
+            if a not in final_correct_segments:
+                final_correct_segments[a] = []
+            if b not in final_correct_segments[a]:
+                final_correct_segments[a].append(b)
+
+        # Check mutual relations inside border_points (these came from earlier passes).
+        for p, neighs in border_points.items():
+            for nb in neighs:
+                if nb in border_points and p in border_points[nb]:
+                    _add_mutual(p, nb)
+                    _add_mutual(nb, p)
+
+        # Check mutual relations inside still_not_connected_border_points and cross-relations with border_points.
+        for p, (neighs, _) in list(still_not_connected_border_points.items()):
+            for nb in neighs:
+                if nb in still_not_connected_border_points and p in still_not_connected_border_points[nb][0]:
+                    _add_mutual(p, nb)
+                    _add_mutual(nb, p)
+                if nb in border_points and p in border_points.get(nb, []):
+                    _add_mutual(p, nb)
+                    _add_mutual(nb, p)
+
+        # Remove duplicates in adjacency lists (preserve insertion order).
+        for k, v in list(final_correct_segments.items()):
+            # simple de-dup while preserving order:
+            seen: set[Point] = set()
+            newlist: list[Point] = []
+            for x in v:
+                if x not in seen:
+                    seen.add(x)
+                    newlist.append(x)
+            final_correct_segments[k] = newlist
+
+        # Everything not in final_correct_segments is an alone island -> remove from processing lists.
+        all_border_keys = set(list(border_points.keys()) + list(still_not_connected_border_points.keys()))
+        for p in list(all_border_keys):
+            if p not in final_correct_segments or len(final_correct_segments[p]) == 0:
+                alone_islands.add(p)
+                if p in border_points:
+                    del border_points[p]
+                if p in still_not_connected_border_points:
+                    del still_not_connected_border_points[p]
+
+        # Use final_correct_segments as the adjacency map for next steps.
+        correct_segments = final_correct_segments
+
 
         #
         ### Step 7: Group all the connected segments together. ###
         #
         segments: list[PointCluster] = []
 
-        # TODO: Group all the connected segments together. (Connected = there is a path between all points using segments in correct_segments, that looks like a graph description).
-        pass
+        visited: set[Point] = set()
+
+        def _order_component(component_nodes: list[Point], adjacency: dict[Point, list[Point]]) -> list[Point]:
+            """ Return an ordered list of points for a connected component.
+                Prefer endpoints (degree==1) when available; otherwise use angle-based greedy traversal.
+            """
+
+            # degree map
+            deg = {n: len(adjacency.get(n, [])) for n in component_nodes}
+            endpoints = [n for n in component_nodes if deg[n] == 1]
+            is_cycle = len(endpoints) == 0
+
+            # pick start
+            #
+            start: Point
+            #
+            if is_cycle:
+                start = component_nodes[0]
+            else:
+                start = endpoints[0]
+
+            ordered: list[Point] = []
+            prev: Optional[Point] = None
+            current: Point = start
+
+            for _ in range(len(component_nodes)):
+                ordered.append(current)
+                neighs: list[Point] = [nb for nb in adjacency.get(current, []) if nb != prev]
+                if not neighs:
+                    break
+                if len(neighs) == 1:
+                    next_node = neighs[0]
+                else:
+                    # If we have multiple choices, prefer the one that keeps a smooth turn.
+                    if prev is None:
+                        # pick closest if no previous direction
+                        dists: dict[Point, float] = {nb: current.calculate_distance(nb) for nb in neighs}
+                        next_node: Point = min(dists, key=dists.get)
+                    else:
+                        angles = {nb: self._calculate_ccw_angle(prev, current, nb) for nb in neighs}
+                        next_node: Point = min(angles, key=angles.get)
+                prev, current = current, next_node
+
+            # If some nodes remain due to branching (rare), append them (they will be visited as separate tails).
+            if len(ordered) < len(component_nodes):
+                missing = [n for n in component_nodes if n not in ordered]
+                ordered.extend(missing)
+
+            return ordered
+
+        # BFS/DFS to find connected components from adjacency map `correct_segments`.
+        for root in list(correct_segments.keys()):
+            if root in visited:
+                continue
+            stack = [root]
+            component_nodes: list[Point] = []
+            visited.add(root)
+            while stack:
+                node = stack.pop()
+                component_nodes.append(node)
+                for nb in correct_segments.get(node, []):
+                    if nb not in visited:
+                        visited.add(nb)
+                        stack.append(nb)
+
+            ordered_nodes = _order_component(component_nodes, correct_segments)
+            cluster = PointCluster(init_size=len(ordered_nodes))
+            for node in ordered_nodes:
+                cluster.append(node)
+            segments.append(cluster)
 
         #
         ### Step 8: Join all the separated segments to create the largest and more coherent polygon -> (no crosscuts and strange shapes).
         #
+        if not segments:
+            # nothing to return
+            return []
 
-        # TODO
-        pass
+        # Sort segments by length descending and start from the largest.
+        segments.sort(key=lambda s: s.length, reverse=True)
+        main = segments.pop(0)
+        main_points: list[Point] = [ main[i] for i in range(len(main)) ]
+
+        # Greedy merge remaining segments: choose the best segment+orientation to attach at either end,
+        # scoring by distance + angle penalty to favor smooth joins.
+        while segments:
+            best_score = float("inf")
+            best_idx = -1
+            best_action = None  # ('attach_end'/'attach_start', 'as_is'/'reversed')
+            best_candidate_pts: list[Point] = []
+
+            # Precompute main endpoints and their previous neighbors for angle evaluation
+            main_start = main_points[0]
+            main_end = main_points[-1]
+            main_start_prev = main_points[1] if len(main_points) > 1 else None
+            main_end_prev = main_points[-2] if len(main_points) > 1 else None
+
+            for idx, seg in enumerate(segments):
+                seg_pts = [ seg[i] for i in range(len(seg)) ]
+                if not seg_pts:
+                    continue
+
+                cand_options = [
+                    ('end', 'first', seg_pts, seg_pts[0], seg_pts[1] if len(seg_pts) > 1 else None),
+                    ('end', 'last', list(reversed(seg_pts)), seg_pts[-1], seg_pts[-2] if len(seg_pts) > 1 else None),
+                    ('start', 'first', seg_pts, seg_pts[0], seg_pts[1] if len(seg_pts) > 1 else None),
+                    ('start', 'last', list(reversed(seg_pts)), seg_pts[-1], seg_pts[-2] if len(seg_pts) > 1 else None),
+                ]
+
+                for attach_pos, orient, ordered_seg_pts, seg_attach_pt, seg_next_pt in cand_options:
+                    if attach_pos == 'end':
+                        mp = main_end
+                        mp_prev = main_end_prev
+                    else:
+                        mp = main_start
+                        mp_prev = main_start_prev
+
+                    # distance score
+                    dist = mp.calculate_distance(seg_attach_pt)
+
+                    # angle penalty (if we have a prev point on both sides)
+                    angle_pen = 0.0
+                    if mp_prev is not None and seg_next_pt is not None:
+                        # penalize large turning angle - prefer small angle between vectors
+                        ang = self._calculate_ccw_angle(mp_prev, mp, seg_attach_pt)
+                        angle_pen = abs(ang)
+
+                    score = default_factor_dist * dist + default_factor_angle * angle_pen
+
+                    if score < best_score:
+                        best_score = score
+                        best_idx = idx
+                        best_action = (attach_pos, orient)
+                        best_candidate_pts = ordered_seg_pts
+
+            # Attach chosen segment to main_points
+            if best_idx == -1:
+                # no candidate found (should not happen) -> break
+                break
+
+            chosen = segments.pop(best_idx)
+
+            attach_pos, orient = best_action
+            seg_pts = best_candidate_pts
+
+            if attach_pos == 'end':
+                # attach to end: append seg_pts but avoid duplicating attachment point if identical
+                if seg_pts and main_points and seg_pts[0].x == main_points[-1].x and seg_pts[0].y == main_points[-1].y:
+                    main_points.extend(seg_pts[1:])
+                else:
+                    main_points.extend(seg_pts)
+            else:
+                # attach to start: prepend seg_pts
+                if seg_pts and main_points and seg_pts[-1].x == main_points[0].x and seg_pts[-1].y == main_points[0].y:
+                    main_points = seg_pts[:-1] + main_points
+                else:
+                    main_points = seg_pts + main_points
 
         #
         ### Step 9: Return the polygon. ###
         #
+        # Build final PointCluster from main_points and return the largest polygon only.
+        final_cluster = PointCluster(init_size=len(main_points))
+        for pt in main_points:
+            final_cluster.append(pt)
 
-        # TODO: returns only the large polygon of the continent, I will take care of the alone islands later.
-        pass
+        final_polygon = Polygon(boundary=final_cluster, grid_context=self)
+        return [final_polygon]
 
-        #
-        return []
 
 
 #
