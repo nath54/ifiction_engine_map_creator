@@ -1703,37 +1703,118 @@ class LargePointsAreas:
             nb_neighbours: int = nb_borders + nb_non_borders
 
             #
-            if nb_borders <= 1:
-
-                #
-                alone_islands.add( p )
-                #
-                del border_points[p]
-                #
-                continue
-
+            ### Case where a segments has already been validated for this points. ###
             #
-            if nb_neighbours == 1:
+            if nb_to_complete == 1:
+
+                #
+                if nb_borders <= 1:
+
+                    #
+                    alone_islands.add( p )
+                    #
+                    del border_points[p]
+                    #
+                    continue
+
+                #
+                if nb_neighbours == 1:
+
+                    #
+                    still_not_connected_border_points[p][0].append( neighbours_border[0] )
+                    #
+                    continue
+
+                #
+                neighbours_borders_and_distances: dict[Point, float] = {}
+
+                #
+                for np in neighbours_border:
+
+                    #
+                    neighbours_borders_and_distances[np] = p.calculate_distance( np )
+
+                #
+                neighbours_border.sort( key = lambda x: neighbours_borders_and_distances[x] )
 
                 #
                 still_not_connected_border_points[p][0].append( neighbours_border[0] )
-                #
-                continue
 
             #
-            neighbours_borders_and_distances: dict[Point, float] = {}
-
+            ### Case where there are two points to complete for this point. ###
             #
-            for np in neighbours_border:
+            else:
 
                 #
-                neighbours_borders_and_distances[np] = p.calculate_distance( np )
+                if nb_borders <= 1:
 
-            #
-            neighbours_border.sort( key = lambda x: neighbours_borders_and_distances[x] )
+                    #
+                    alone_islands.add( p )
+                    #
+                    del border_points[p]
+                    #
+                    continue
 
-            #
-            still_not_connected_border_points[p][0].append( neighbours_border[0] )
+                #
+                if nb_neighbours == 2:
+
+                    #
+                    border_points[p] = neighbours_border
+                    #
+                    continue
+
+                #
+                neighbours_borders_and_distances: dict[Point, float] = {}
+
+                #
+                for np in neighbours_border:
+
+                    #
+                    neighbours_borders_and_distances[np] = p.calculate_distance( np )
+
+                #
+                neighbours_border.sort( key = lambda x: neighbours_borders_and_distances[x] )
+
+                #
+                b1: Point = neighbours_border[0]
+                #
+                b1_agl: float = p.calculate_angle( b1 )
+
+                #
+                border_points[p].append( b1 )
+
+                #
+                mini_p: Optional[Point] = []
+                #
+                mini_score: float = float("inf")
+
+                #
+                for np in neighbours_border[1:]:
+
+                    #
+                    np_agl: float = p.calculate_angle( np )
+
+                    #
+                    score: float = default_factor_dist * neighbours_borders_and_distances[np] - default_factor_dist * min( abs(np_agl - b1_agl), abs(b1_agl - np_agl) )
+
+                    #
+                    if score < mini_score:
+
+                        #
+                        mini_p = np
+                        mini_score = score
+
+                #
+                if mini_p is None:
+
+                    #
+                    border_points[p].append( neighbours_border[1] )
+
+                #
+                else:
+
+                    #
+                    border_points[p].append( mini_p )
 
         #
         ### Step 5: Check for all new correct border_segments. ###
@@ -1778,13 +1859,36 @@ class LargePointsAreas:
                         break
 
         #
+        ### Step 6: check for all the non completed border points and put them in the alone islands points. ###
+        #
+
+        # TODO
         pass
 
         #
-        result_polygon_cluster: PointCluster = PointCluster(0)
+        ### Step 7: Group all the connected segments together. ###
+        #
+        segments: list[PointCluster] = []
+
+        # TODO: Group all the connected segments together. (Connected = there is a path between all points using segments in correct_segments, that looks like a graph description).
+        pass
 
         #
-        return [Polygon(result_polygon_cluster, self)]
+        ### Step 8: Join all the separated segments to create the largest and more coherent polygon -> (no crosscuts and strange shapes).
+        #
+
+        # TODO
+        pass
+
+        #
+        ### Step 9: Return the polygon. ###
+        #
+
+        # TODO: returns only the large polygon of the continent, I will take care of the alone islands later.
+        pass
+
+        #
+        return []
 
 
 #
