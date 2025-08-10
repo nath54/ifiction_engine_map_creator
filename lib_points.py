@@ -216,6 +216,14 @@ class Point:
 
 
     #
+    ### hash function. ###
+    #
+    def __hash__(self) -> int:
+        #
+        return hash(self.__repr__())
+
+
+    #
     ### x getter. ###
     #
     @property
@@ -1407,7 +1415,7 @@ class LargePointsAreas:
                 pbar.update(n=1)
 
         #
-        print(f"Border points found : {nb_border_pts}")
+        print(f"Border points found: {nb_border_pts}")
 
 
     #
@@ -1429,9 +1437,59 @@ class LargePointsAreas:
 
 
     #
-    ### Algorithm: Spatially-Accelerated Angular Greedy Algorithm ###
+    ### Function to search smartly points around anothe point. ###
     #
-    def create_polygon_from_border(self, search_radius_factor: float = 3.0) -> 'Polygon':
+    def search_neighbours_points(self, search_radius_factor: float, point: Point, all_border_points: dict[Point, Any]) -> tuple[ list[Point], list[Point] ]:
+
+        #
+        ### Get candidate points efficiently. ###
+        #
+        search_radius: float = self.sub_cluster_size * search_radius_factor
+        candidate_points: list[Point] = []
+        candidate_points_borders: list[Point] = []
+        candidate_points_non_borders: list[Point] = []
+
+        #
+        ### Adaptive search radius. ###
+        #
+        while not candidate_points:
+
+            #
+            candidate_points = self.get_all_points_in_circle(point=point, radius=search_radius)
+            #
+            candidate_points_borders = [p for p in candidate_points if p in all_border_points]
+            candidate_points_non_borders = [p for p in candidate_points if p.data[3] == 0]
+
+            #
+            if not candidate_points_borders:
+
+                #
+                ### # Increase radius if no candidates found. ###
+                #
+                new_search_radius: float = search_radius * 1.5
+
+                #
+                if search_radius > 15 * self.sub_cluster_size or search_radius > new_search_radius:
+                    #
+                    # print("\nWarning: Search radius is very large. There might be a large gap in border points.")
+
+                    #
+                    ### If search fails, fall back to all remaining points. ###
+                    #
+                    candidate_points = list(all_border_points.keys())
+                    break
+
+                #
+                search_radius = new_search_radius
+
+        #
+        return candidate_points_borders, candidate_points_non_borders
+
+
+    #
+    ### Algorithm: Custom Algorithm ###
+    #
+    def create_polygon_from_border(self, search_radius_factor: float = 3.0, default_factor_dist: float = 1.0, default_factor_angle: float = 1.0) -> list['Polygon']:
         """
         Creates a cyclic path (polygon) from points marked as border points.
 
@@ -1447,143 +1505,286 @@ class LargePointsAreas:
         print("Gathering border points...")
 
         #
-        ### Step 0: Get all border points. Using a dict for O(1) lookups and removal. ###
+        ### Step -1: Prepare for empty islands points (border points that doesn't works with the continent). ###
         #
-        unvisited_border_points: dict[Point, bool] = {
-            p: True for p in self if p.param2 == 1
+        alone_islands: set[Point] = set()
+
+        #
+        ### Step 0: Get all border points. ###
+        #
+        border_points: dict[Point, list[Point]] = {
+            p: [] for p in self if p.param2 == 1
         }
         #
-        if not unvisited_border_points:
+        if not border_points:
             #
-            print("No border points found to create a polygon.")
-            return Polygon(PointCluster(0), self)
+            print("Warning: No border points found to create a polygon.")
+            #
+            return []
 
         #
-        ### Step 1: Find the starting point (lowest y, then lowest x). ###
+        ### Step 1: first pass among all border points. Looking up at micro point of view and trying to search for all border points which points are the best to  ###
         #
-        p_start: Point = min(unvisited_border_points.keys(), key=lambda p: (p.y, p.x))
+        print("First pass among all border points to check borders joins...")
         #
-        print(f"Starting polygon construction from point: {p_start}")
-
+        p: Point
         #
-        ### Step 2: Initialize for the main loop. ###
-        #
-        result_polygon_cluster = PointCluster(init_size=len(unvisited_border_points))
-        result_polygon_cluster.append(p_start)
-        #
-        del unvisited_border_points[p_start]
-        #
-        p_current: Point = p_start
-        #
-        ### Create a virtual previous point to establish a horizontal reference vector. ###
-        #
-        p_prev = Point(p_start.x - 10, p_start.y)
-
-        #
-        ### Step 3: main loop. ###
-        #
-        print("Constructing polygon path...")
-        #
-        pbar = tqdm(total=len(unvisited_border_points))
-
-        #
-        while unvisited_border_points:
+        for p in tqdm( border_points ):
 
             #
-            ### Step 3a: Get candidate points efficiently. ###
+            neighbours_border: list[Point]
+            neighbours_non_border: list[Point]
             #
-            search_radius = self.sub_cluster_size * search_radius_factor
-            candidate_points = []
+            neighbours_border, neighbours_non_border = self.search_neighbours_points(search_radius_factor=search_radius_factor, point=p, all_border_points=border_points)
 
             #
-            ### Adaptive search radius. ###
+            nb_borders: int = len(neighbours_border)
+            nb_non_borders: int = len(neighbours_non_border)
+            nb_neighbours: int = nb_borders + nb_non_borders
+
             #
-            while not candidate_points:
+            if nb_borders <= 1:
 
                 #
-                points_in_circle = self.get_all_points_in_circle(point=p_current, radius=search_radius)
+                alone_islands.add( p )
                 #
-                candidate_points = [p for p in points_in_circle if p in unvisited_border_points]
+                del border_points[p]
+                #
+                continue
+
+            #
+            if nb_neighbours == 2:
 
                 #
-                if not candidate_points:
+                border_points[p] = neighbours_border
+                #
+                continue
+
+            #
+            neighbours_borders_and_distances: dict[Point, float] = {}
+
+            #
+            for np in neighbours_border:
+
+                #
+                neighbours_borders_and_distances[np] = p.calculate_distance( np )
+
+            #
+            neighbours_border.sort( key = lambda x: neighbours_borders_and_distances[x] )
+
+            #
+            b1: Point = neighbours_border[0]
+            #
+            b1_agl: float = p.calculate_angle( b1 )
+
+            #
+            border_points[p].append( b1 )
+
+            #
+            mini_p: Optional[Point] = []
+            #
+            mini_score: float = float("inf")
+
+            #
+            for np in neighbours_border[1:]:
+
+                #
+                np_agl: float = p.calculate_angle( np )
+
+                #
+                score: float = default_factor_dist * neighbours_borders_and_distances[np] - default_factor_dist * min( abs(np_agl - b1_agl), abs(b1_agl - np_agl) )
+
+                #
+                if score < mini_score:
 
                     #
-                    ### # Increase radius if no candidates found. ###
-                    #
-                    new_search_radius: float = search_radius * 1.5
+                    mini_p = np
+                    mini_score = score
+
+            #
+            if mini_p is None:
+
+                #
+                border_points[p].append( neighbours_border[1] )
+
+            #
+            else:
+
+                #
+                border_points[p].append( mini_p )
+
+        #
+        ### Step 2: Check for all correct border_segments. ###
+        #
+        correct_segments: dict[Point, list[Point]] = {}
+
+        #
+        print("Second pass among all border points to check valid borders joins...")
+        #
+        for p, neighbours in tqdm( border_points.items() ):
+
+            #
+            for np in neighbours:
+
+                #
+                for npp in border_points[np]:
 
                     #
-                    if search_radius > 15 * self.sub_cluster_size or search_radius > new_search_radius:
-                        #
-                        # print("\nWarning: Search radius is very large. There might be a large gap in border points.")
+                    if npp == p:
 
                         #
-                        ### If search fails, fall back to all remaining points. ###
+                        if np not in correct_segments:
+                            #
+                            correct_segments[np] = []
+
                         #
-                        candidate_points = list(unvisited_border_points.keys())
+                        if p not in correct_segments:
+                            #
+                            correct_segments[p] = []
+
+                        #
+                        if np not in correct_segments[p]:
+                            #
+                            correct_segments[p].append( np )
+
+                        #
+                        if p not in correct_segments[np]:
+                            #
+                            correct_segments[np].append( p )
+
+                        #
                         break
 
-                    #
-                    search_radius = new_search_radius
-
-            #
-            ### Step 3b: Select the best candidate (tightest "left turn"). ###
-            #
-            best_candidate: Point = None
-            min_angle: float = float('inf') # We are looking for the smallest positive angle
-
-            #
-            norm_cost: float = 0.05 * self.sub_cluster_size
-
-            #
-            cand: Point
-            #
-            for cand in candidate_points:
-
-                #
-                angle: float = self._calculate_ccw_angle(p_prev, p_current, cand) + ( p_current.calculate_distance(cand) / norm_cost )
-
-                #
-                if angle < min_angle:
-                    #
-                    min_angle = angle
-                    best_candidate = cand
-
-            #
-            if best_candidate is None:
-                #
-                print("\nError: Could not find a next point. Aborting polygon creation.")
-                break # Should not happen if candidate_points is not empty
-
-            #
-            ### Step 3d: Advance. ###
-            #
-            p_next: Point = best_candidate  # type: ignore
-            #
-            result_polygon_cluster.append(p_next)  # type: ignore
-            #
-            del unvisited_border_points[p_next]
-            #
-            p_prev = p_current  # type: ignore
-            p_current = p_next  # type: ignore
-            #
-            pbar.update(1)
-
-            #
-            ### Step 3c: Check for loop termination. ###
-            #
-            if p_current == p_start:
-                #
-                print("\nWarning: Closed loop before visiting all points. This may indicate separate islands of border points.")
-                break
+        #
+        ### Step 3: check for all non completed points. ###
+        #
 
         #
-        pbar.close()
-        print(f"Polygon construction complete with {len(result_polygon_cluster)} vertices.")
+        still_not_connected_border_points: dict[Point, tuple[list[Point], int]] = {}
 
         #
-        return Polygon(result_polygon_cluster, self)
+        print("Third pass among all border points to get all still not completely yet connected border points...")
+        #
+        for p in tqdm( border_points.keys() ):
+
+            #
+            if p not in correct_segments:
+
+                #
+                still_not_connected_border_points[p] = ([], 2)
+
+            #
+            elif len(correct_segments[p]) != 2:
+
+                #
+                still_not_connected_border_points[p] = ([], 1)
+
+        #
+        ### Step 4: Fourth pass among all remaining incomplete border points to joins them. ###
+        #
+        print("Fourth pass among all remaining incomplete border points to joins them...")
+        #
+        p: Point
+        #
+        for p in tqdm( still_not_connected_border_points ):
+
+            #
+            nb_to_complete: int = still_not_connected_border_points[p][1]
+
+            #
+            neighbours_border: list[Point]
+            neighbours_non_border: list[Point]
+            #
+            neighbours_border, neighbours_non_border = self.search_neighbours_points(search_radius_factor=search_radius_factor, point=p, all_border_points=still_not_connected_border_points)
+
+            #
+            nb_borders: int = len(neighbours_border)
+            nb_non_borders: int = len(neighbours_non_border)
+            nb_neighbours: int = nb_borders + nb_non_borders
+
+            #
+            if nb_borders <= 1:
+
+                #
+                alone_islands.add( p )
+                #
+                del border_points[p]
+                #
+                continue
+
+            #
+            if nb_neighbours == 1:
+
+                #
+                still_not_connected_border_points[p][0].append( neighbours_border[0] )
+                #
+                continue
+
+            #
+            neighbours_borders_and_distances: dict[Point, float] = {}
+
+            #
+            for np in neighbours_border:
+
+                #
+                neighbours_borders_and_distances[np] = p.calculate_distance( np )
+
+            #
+            neighbours_border.sort( key = lambda x: neighbours_borders_and_distances[x] )
+
+            #
+            still_not_connected_border_points[p][0].append( neighbours_border[0] )
+
+        #
+        ### Step 5: Check for all new correct border_segments. ###
+        #
+        correct_segments: dict[Point, list[Point]] = {}
+
+        #
+        print("Fifth pass among all border points to check new valid borders joins...")
+        #
+        for p, neighbours in tqdm( still_not_connected_border_points.items() ):
+
+            #
+            for np in neighbours[0]:
+
+                #
+                for npp in border_points[np][0]:
+
+                    #
+                    if npp == p:
+
+                        #
+                        if np not in correct_segments:
+                            #
+                            correct_segments[np] = []
+
+                        #
+                        if p not in correct_segments:
+                            #
+                            correct_segments[p] = []
+
+                        #
+                        if np not in correct_segments[p]:
+                            #
+                            correct_segments[p].append( np )
+
+                        #
+                        if p not in correct_segments[np]:
+                            #
+                            correct_segments[np].append( p )
+
+                        #
+                        break
+
+        #
+        pass
+
+        #
+        result_polygon_cluster: PointCluster = PointCluster(0)
+
+        #
+        return [Polygon(result_polygon_cluster, self)]
 
 
 #
