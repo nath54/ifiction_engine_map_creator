@@ -3,10 +3,41 @@
 #
 import random
 #
+from math import floor, ceil, pi, cos, sin
+#
+import numpy as np  # type: ignore
+#
 from tqdm import tqdm
 #
 import lib_points as lp
-import lib_display as ld
+import lib_display as ld  # type: ignore
+
+
+#
+class InitialContinentData:
+
+    #
+    def __init__(
+        self,
+        type: str,
+        shape: str,
+        center_position_x: int,
+        center_position_y: int,
+        size: float,
+        nb_base_boundary_points: int,
+        nb_added_boundary_points: int,
+    ) -> None:
+
+        #
+        self.type: str = type
+        self.shape: str = shape
+        self.center_position_x: int = center_position_x
+        self.center_position_y: int = center_position_y
+        self.size: float = size
+        self.nb_base_boundary_points: int = nb_base_boundary_points
+        self.nb_added_boundary_points: int = nb_added_boundary_points
+        #
+        self.nb_boundary_points: int = nb_base_boundary_points + nb_added_boundary_points
 
 
 #
@@ -186,6 +217,273 @@ def create_cluster_of_points(
 
 
 #
+def create_continent_random_walk(continent_id: int, initial_continent_data: InitialContinentData, all_points: lp.LargePointsAreas) -> lp.PointCluster:
+
+    #
+    continent_boundary: lp.PointCluster = lp.PointCluster(init_size=initial_continent_data.nb_boundary_points)
+
+    #
+    return continent_boundary
+
+
+#
+def create_continent_shape_circle(continent_id: int, initial_continent_data: InitialContinentData, all_points: lp.LargePointsAreas) -> lp.PointCluster:
+
+    #
+    boundary_points: list[lp.Point] = []
+
+    #
+    dd: int = 2 * floor( initial_continent_data.size / initial_continent_data.nb_added_boundary_points )
+
+    #
+    nb_added_pts_per_pts: int = floor( initial_continent_data.nb_added_boundary_points / initial_continent_data.nb_base_boundary_points )
+
+    #
+    nb_remaining_added_pts: int = initial_continent_data.nb_added_boundary_points
+
+    #
+    r: float = initial_continent_data.size
+
+    #
+    da: float = ( 2 * pi ) / initial_continent_data.nb_base_boundary_points
+
+    #
+    a: float = ( pi - da ) / 2
+
+    #
+    rad: float = r * cos( a )
+
+    #
+    for i in range(initial_continent_data.nb_base_boundary_points):
+
+        #
+        crt_agl: float = i * da
+
+        #
+        cx: int = round( r * cos(crt_agl) )
+        cy: int = round( r * sin(crt_agl) )
+
+        #
+        cagl: float = random.uniform( 0, 2 * pi )
+
+        #
+        crad: float = random.uniform( 0, rad )
+
+        #
+        rpx: int = cx + round( crad * cos(cagl) )
+        rpy: int = cy + round( crad * sin(cagl) )
+
+        #
+        boundary_points.append( lp.Point(x=rpx, y=rpy) )
+
+        #
+        if i != 0 and nb_remaining_added_pts > 0:
+
+            #
+            for _ in range(0, min(nb_added_pts_per_pts, nb_remaining_added_pts)):
+
+                #
+                dx: int = random.randint( -dd, dd )
+                dy: int = random.randint( -dd, dd )
+
+                #
+                dpt: lp.Point = lp.Point( x=dx, y=dy )
+
+                #
+                boundary_points.insert( -2, dpt + ( boundary_points[-1] + boundary_points[-2] ) / 2 )
+
+            #
+            nb_added_pts_per_pts -= nb_added_pts_per_pts
+
+    #
+    continent_boundary: lp.PointCluster = lp.PointCluster(init_size=initial_continent_data.nb_boundary_points)
+
+    #
+    for i in range(initial_continent_data.nb_boundary_points):
+
+        #
+        continent_boundary.data[i] = boundary_points[i].data
+
+    #
+    return continent_boundary
+
+
+#
+def create_continent_shape_square(continent_id: int, initial_continent_data: InitialContinentData, all_points: lp.LargePointsAreas) -> lp.PointCluster:
+
+    #
+    boundary_points: list[lp.Point] = []
+
+    #
+    nps: int = ceil( initial_continent_data.nb_base_boundary_points / 4 )
+
+    #
+    rad: int = floor( initial_continent_data.size / nps )
+
+    #
+    dd: int = 2 * floor( initial_continent_data.size / initial_continent_data.nb_boundary_points )
+
+    #
+    nb_added_pts_per_pts: int = floor( initial_continent_data.nb_added_boundary_points / initial_continent_data.nb_base_boundary_points )
+
+    #
+    nb_remaining_added_pts: int = initial_continent_data.nb_added_boundary_points
+
+    #
+    x1: int = round( initial_continent_data.center_position_x - initial_continent_data.size )
+    x2: int = round( initial_continent_data.center_position_x + initial_continent_data.size )
+    x3: int = x2
+    x4: int = x1
+
+    #
+    y1: int = round( initial_continent_data.center_position_y - initial_continent_data.size )
+    y2: int = y1
+    y3: int = round( initial_continent_data.center_position_y + initial_continent_data.size )
+    y4: int = y3
+
+    #
+    for i in range(initial_continent_data.nb_base_boundary_points):
+
+        #
+        cx: int
+        cy: int
+
+        #
+        if i // nps == 0:
+
+            #
+            cx = x1 + rad * 2 * i
+            cy = y1
+
+        #
+        elif i // nps == 1:
+
+            #
+            cx = x1
+            cy = y2 + rad * 2 * (i - nps)
+
+        #
+        elif i // nps == 2:
+
+            #
+            cx = x3 - rad * 2 * (i - 2 * nps)
+            cy = y3
+
+        #
+        else:
+
+            #
+            cx = x4
+            cy = y4 - rad * 2 * (i - 3 * nps)
+
+        #
+        cagl: float = random.uniform( 0, 2 * pi )
+
+        #
+        crad: float = random.uniform( 0, rad )
+
+        #
+        rpx: int = cx + round( crad * cos(cagl) )
+        rpy: int = cy + round( crad * sin(cagl) )
+
+        #
+        boundary_points.append( lp.Point(x=rpx, y=rpy) )
+
+        #
+        if i != 0 and nb_remaining_added_pts > 0:
+
+            #
+            for _ in range(0, min(nb_added_pts_per_pts, nb_remaining_added_pts)):
+
+                #
+                dx: int = random.randint( -dd, dd )
+                dy: int = random.randint( -dd, dd )
+
+                #
+                dpt: lp.Point = lp.Point( x=dx, y=dy )
+
+                #
+                boundary_points.insert( -2, dpt + ( boundary_points[-1] + boundary_points[-2] ) / 2 )
+
+            #
+            nb_remaining_added_pts -= nb_added_pts_per_pts
+
+    #
+    continent_boundary: lp.PointCluster = lp.PointCluster(init_size=initial_continent_data.nb_boundary_points)
+
+    #
+    for i in range(initial_continent_data.nb_boundary_points):
+
+        #
+        continent_boundary.data[i] = boundary_points[i].data
+
+    #
+    return continent_boundary
+
+
+#
+def create_continent_shape_ellipse(continent_id: int, initial_continent_data: InitialContinentData, all_points: lp.LargePointsAreas) -> lp.PointCluster:
+
+    #
+    continent_boundary: lp.PointCluster = lp.PointCluster(init_size=initial_continent_data.nb_boundary_points)
+
+    #
+    return continent_boundary
+
+
+#
+def create_continent_polygon(continent_id: int, initial_continent_data: InitialContinentData, all_points: lp.LargePointsAreas) -> lp.Polygon:
+
+    #
+    continent_polygon_boundary: lp.PointCluster
+
+    #
+    if initial_continent_data.type == "random_walk":
+
+        #
+        continent_polygon_boundary = create_continent_random_walk(continent_id=continent_id, initial_continent_data=initial_continent_data, all_points=all_points)
+
+    #
+    elif initial_continent_data.type == "shape":
+
+        #
+        if initial_continent_data.shape == "circle":
+
+            #
+            continent_polygon_boundary = create_continent_shape_circle(continent_id=continent_id, initial_continent_data=initial_continent_data, all_points=all_points)
+
+        #
+        elif initial_continent_data.shape == "ellipse":
+
+            #
+            continent_polygon_boundary = create_continent_shape_ellipse(continent_id=continent_id, initial_continent_data=initial_continent_data, all_points=all_points)
+
+        #
+        elif initial_continent_data.shape == "square":
+
+            #
+            continent_polygon_boundary = create_continent_shape_square(continent_id=continent_id, initial_continent_data=initial_continent_data, all_points=all_points)
+
+        #
+        else:
+
+            #
+            raise UserWarning(f"Error: Unknown initial continent shape : `{initial_continent_data.shape}` !")
+
+    #
+    else:
+
+        #
+        raise UserWarning(f"Error: Unknown initial continent type : `{initial_continent_data.type}` !")
+
+    #
+    continent_polygon: lp.Polygon = lp.Polygon(boundary=continent_polygon_boundary, grid_context=all_points)
+
+    #
+    return continent_polygon
+
+
+#
 def terrain_generator(
         tx: int = 2048,
         ty: int = 2048,
@@ -199,44 +497,14 @@ def terrain_generator(
         dead_angle_min_border_points: float = 100,
         radius_between_border_points: float = 1,
         search_radius_factor: float = 0.2,
+        initial_continents: list[InitialContinentData] = []
     ) -> None:
 
-    #
-    points: list[ lp.Point ] = generate_continent_points(
-        nb_continents=nb_continents,
-        tx=tx,
-        ty=ty,
-        continent_superficy_min=continent_superficy_min,
-        continent_superficy_max=continent_superficy_max,
-        dist_between_points=dist_between_points,
-        border_margin=border_margin,
-    )
+    pass
 
-    #
-    continents_points: list[ lp.LargePointsAreas ] = create_cluster_of_points(
-        points=points,
-        nb_continents=nb_continents,
-        treshold_point_continent_distance=treshold_point_continent_distance
-    )
+    # TODO: Generate continent polygons
 
-    #
-    print(f"Continents created: {len(continents_points)}")
-
-    #
-    polygons: list[lp.Polygon] = []
-
-    #
-    for cp in continents_points:
-        #
-        cp.set_all_point_border(radius=radius_border_points, dead_angle_min=dead_angle_min_border_points, radius_between_border_points=radius_between_border_points)
-        #
-        polygons += cp.create_polygon_from_border(search_radius_factor=search_radius_factor)
-
-    #
-    ld.render_points_with_colors_from_points_areas_with_polygons(tx=tx, ty=ty, point_clusters=continents_points, colors=ld.generate_random_colors(len(continents_points)), polygons=polygons)
-
-    #
-    # TODO: calculate "border" points.
+    # TODO: Generate continent points inside continents polygons
 
     # TODO: Add mountains, rivers, lakes, lands to continents. (rivers must have branches, and etc...). Separate ocean from continents.
 
