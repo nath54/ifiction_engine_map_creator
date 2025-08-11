@@ -222,6 +222,8 @@ def create_continent_random_walk(continent_id: int, initial_continent_data: Init
     #
     continent_boundary: lp.PointCluster = lp.PointCluster(init_size=initial_continent_data.nb_boundary_points)
 
+    # TODO: random walk
+
     #
     return continent_boundary
 
@@ -260,8 +262,8 @@ def create_continent_shape_circle(continent_id: int, initial_continent_data: Ini
         crt_agl: float = i * da
 
         #
-        cx: int = round( r * cos(crt_agl) )
-        cy: int = round( r * sin(crt_agl) )
+        cx: int = initial_continent_data.center_position_x + round( r * cos(crt_agl) )
+        cy: int = initial_continent_data.center_position_y + round( r * sin(crt_agl) )
 
         #
         cagl: float = random.uniform( 0, 2 * pi )
@@ -293,7 +295,7 @@ def create_continent_shape_circle(continent_id: int, initial_continent_data: Ini
                 boundary_points.insert( -2, dpt + ( boundary_points[-1] + boundary_points[-2] ) / 2 )
 
             #
-            nb_added_pts_per_pts -= nb_added_pts_per_pts
+            nb_remaining_added_pts -= nb_added_pts_per_pts
 
     #
     continent_boundary: lp.PointCluster = lp.PointCluster(init_size=initial_continent_data.nb_boundary_points)
@@ -425,7 +427,100 @@ def create_continent_shape_square(continent_id: int, initial_continent_data: Ini
 def create_continent_shape_ellipse(continent_id: int, initial_continent_data: InitialContinentData, all_points: lp.LargePointsAreas) -> lp.PointCluster:
 
     #
+    boundary_points: list[lp.Point] = []
+
+    #
+    dd: int = 2 * floor( initial_continent_data.size / initial_continent_data.nb_added_boundary_points )
+
+    #
+    nb_added_pts_per_pts: int = floor( initial_continent_data.nb_added_boundary_points / initial_continent_data.nb_base_boundary_points )
+
+    #
+    nb_remaining_added_pts: int = initial_continent_data.nb_added_boundary_points
+
+    #
+    ### Define ellipse radii and a random rotation angle. ###
+    #
+    radius_x: float = initial_continent_data.size
+    radius_y: float = initial_continent_data.size / 2
+    rotation_angle: float = random.uniform( 0, 2 * pi )
+
+    #
+    ### Calculate the angular step between base points. ###
+    #
+    da: float = ( 2 * pi ) / initial_continent_data.nb_base_boundary_points
+
+    #
+    ### The radius for the random displacement of base points. ###
+    #
+    rad: float = initial_continent_data.size / initial_continent_data.nb_base_boundary_points
+
+    #
+    for i in range(initial_continent_data.nb_base_boundary_points):
+
+        #
+        ### Calculate the point on the ellipse for the current angle. ###
+        #
+        angle: float = i * da
+        #
+        unrotated_x: float = radius_x * cos(angle)
+        unrotated_y: float = radius_y * sin(angle)
+
+        #
+        ### Apply the rotation to the point. ###
+        #
+        rotated_x: float = unrotated_x * cos(rotation_angle) - unrotated_y * sin(rotation_angle)
+        rotated_y: float = unrotated_x * sin(rotation_angle) + unrotated_y * cos(rotation_angle)
+
+        #
+        ### Translate the point to the continent's center. ###
+        #
+        cx: int = round( initial_continent_data.center_position_x + rotated_x )
+        cy: int = round( initial_continent_data.center_position_y + rotated_y )
+
+        #
+        ### Add a random displacement to the point for a more natural look. ###
+        #
+        cagl: float = random.uniform( 0, 2 * pi )
+        crad: float = random.uniform( 0, rad )
+        #
+        rpx: int = cx + round( crad * cos(cagl) )
+        rpy: int = cy + round( crad * sin(cagl) )
+
+        #
+        boundary_points.append( lp.Point(x=rpx, y=rpy) )
+
+        #
+        ### Add intermediate points between the last two base points to roughen the coastline. ###
+        #
+        if i != 0 and nb_remaining_added_pts > 0:
+
+            #
+            for _ in range(0, min(nb_added_pts_per_pts, nb_remaining_added_pts)):
+
+                #
+                dx: int = random.randint( -dd, dd )
+                dy: int = random.randint( -dd, dd )
+
+                #
+                dpt: lp.Point = lp.Point( x=dx, y=dy )
+
+                #
+                ### Insert a new point near the midpoint of the last two created points. ###
+                #
+                boundary_points.insert( -2, dpt + ( boundary_points[-1] + boundary_points[-2] ) / 2 )
+
+            #
+            nb_remaining_added_pts -= nb_added_pts_per_pts
+
+    #
+    ### Populate the PointCluster with the generated boundary points. ###
+    #
     continent_boundary: lp.PointCluster = lp.PointCluster(init_size=initial_continent_data.nb_boundary_points)
+    #
+    for i in range(initial_continent_data.nb_boundary_points):
+        #
+        continent_boundary.data[i] = boundary_points[i].data
 
     #
     return continent_boundary
