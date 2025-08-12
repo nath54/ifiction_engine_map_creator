@@ -488,6 +488,14 @@ class Point:
     ### Calculate angle with another point. ###
     #
     def calculate_angle(self, p: "Point") -> float:
+        """
+        Return angle in degrees for vector (self -> p):
+            0.0   = up (north)
+            90.0  = right (east)
+            180.0 = down (south)
+            270.0 = left (west)
+        Angles increase clockwise.
+        """
 
         #
         if self.x == p.x:
@@ -511,52 +519,18 @@ class Point:
             return 270.0
 
         #
-        dx: float
-        dy: float
+        dx = float(p.x - self.x)
+        dy = float(p.y - self.y)
 
         #
-        if self.x > p.x:
-
-            #
-            dx = self.x - p.x
-
-            #
-            if self.y > p.y:  # Quadrant 2
-
-                #
-                dy = self.y - p.y
-
-                #
-                return 90.0 - ( np.atan( dy / dx ) * 180.0 / np.pi )
-
-            #
-            else:  # Quandrant 1
-
-                #
-                dy = p.y - self.y
-
-                #
-                return 90.0 + ( np.atan( dy / dx ) * 180.0 / np.pi )
+        ### For typical image/grid coords where y increases downward: ###
+        ### use atan2(dx, -dy) so 0 = up and clockwise is positive. ###
+        #
+        angle_rad = np.arctan2(dx, -dy)
+        angle_deg = (np.degrees(angle_rad) + 360.0) % 360.0
 
         #
-        dx = p.x - self.x
-
-        #
-        if self.y > p.y:  # Quandrant 3
-
-            #
-            dy = self.y - p.y
-
-            #
-            return 270.0 - ( np.atan( dy / dx ) * 180.0 / np.pi )
-
-        # Quadrant 4
-
-        #
-        dy = p.y - self.y
-
-        #
-        return 270.0 + ( np.atan( dy / dx ) * 180.0 / np.pi )
+        return float(angle_deg)
 
 
     #

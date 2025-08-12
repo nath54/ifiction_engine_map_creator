@@ -268,6 +268,7 @@ def create_continent_random_walk(continent_id: int, initial_continent_data: Init
     #
     ordered_base: list[lp.Point] = [ points[i] for i in indexes ]
 
+    """
     #
     n: int = len( ordered_base )
 
@@ -476,6 +477,9 @@ def create_continent_random_walk(continent_id: int, initial_continent_data: Init
 
     #
     return boundary
+    """
+
+    return ordered_base
 
 
 #
@@ -681,7 +685,7 @@ def add_details_to_polygon_borders(continent_id: int, initial_continent_data: In
 
         #
         pc: lp.Point = ( p1 + p2 ) / 2
-        pd: float = p1.calculate_distance( p2 ) / sqrt(2)
+        pd: float = p1.calculate_distance( p2 ) / 2 * sqrt(2)
 
         #
         dx: int = round( random.uniform(-pd, pd) )
