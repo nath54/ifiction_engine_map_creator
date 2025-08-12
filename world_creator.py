@@ -685,7 +685,8 @@ def add_details_to_polygon_borders(continent_id: int, initial_continent_data: In
 
         #
         pc: lp.Point = ( p1 + p2 ) / 2
-        pd: float = p1.calculate_distance( p2 ) / 2 * sqrt(2)
+        pd: float = p1.calculate_distance( p2 ) / (1000 * sqrt(2))
+        pd: float = 1
 
         #
         dx: int = round( random.uniform(-pd, pd) )
@@ -788,205 +789,91 @@ def terrain_generator(
         initial_continents: list[InitialContinentData] = []
     ) -> None:
 
-    """
-    Generate continent polygons (first 3 TODOs):
-        - create a raw cloud of points for continents
-        - prepare random InitialContinentData list if none provided (avoid overlaps)
-        - create continent polygons by calling create_continent_polygon
-
-    Returns:
-        (continent_polygons, initial_continents_used, all_points_container)
-    """
-
-    # -------------------------
-    # 1) Generate raw point cloud
-    # -------------------------
-
-    #
-    print("Terrain generator: generating raw continent point cloud...")
-    #
-    raw_points: list[lp.Point] = generate_continent_points(
-        nb_continents=nb_continents,
-        tx=tx,
-        ty=ty,
-        continent_superficy_min=max(1, continent_superficy_min // 1),
-        continent_superficy_max=max(1, continent_superficy_max // 1),
-        dist_between_points=dist_between_points,
-        border_margin=border_margin
-    )
-
-    #
-    ### Put raw points in a LargePointsAreas context (many helper functions expect that). ###
     #
     all_points: lp.LargePointsAreas = lp.LargePointsAreas()
-
-    #
-    for p in raw_points:
-
-        #
-        ### append uses named arg in other places in this repo -> keep same form. ###
-        #
-        all_points.append(value=p)
-
-    # -------------------------
-    # 2) Prepare initial_continents list (non-overlapping)
-    # -------------------------
 
     #
     if not initial_continents:
 
         #
+        generated: list[ tuple[float, float, float] ] = []
+
+        #
         print("No initial_continents provided: generating random initial continent descriptors...")
         #
-        generated: list[InitialContinentData] = []
-
-        #
-        ### bounds for sizes (pixels). We keep continents reasonably sized relative to the map. ###
-        #
-        min_radius = max(12, int(radius_border_points * 0.5))
-        max_radius = max(min_radius + 1, int(min(tx, ty) // 6))
-
-        #
-        max_attempts = 1000
-        attempts = 0
-
-        #
-        while len(generated) < nb_continents and attempts < max_attempts:
+        for _ in range(10):
 
             #
-            attempts += 1
+            t: bool = False if random.uniform(0, 1) <= 0.6 else True
+            #
+            cont_type: str = "shape" if t else "random_walk"
 
             #
-            ### pick center guarded by border. ###
-            #
-            cx = random.randint(border_margin, tx - 1 - border_margin)
-            cy = random.randint(border_margin, ty - 1 - border_margin)
+            shape: str = random.choice(["circle", "ellipse"]) if t else "random_walk"
 
             #
-            ### pick size (radius) inside sensible bounds. ###
-            #
-            size = random.randint(min_radius, max_radius)
+            nbbpts: int = random.randint(4, 10)
+            nbipts: int = random.randint(1, 6)
+            nbapts: int = random.randint(0, 10)
 
             #
-            ### choose boundary-point counts heuristically from size. ###
-            #
-            nb_base = max(6, int(size / 3))               # number of base boundary points
-            nb_int = max(0, int(size / 2))                # interior/interpolated boundary points
-            nb_added = max(0, int(nb_base / 3))           # added noisy border points
+            csize: float = random.uniform(tx/100, tx/4)
 
             #
-            ### decide type and shape. ###
-            #
-            typ = "shape" if random.random() < 0.6 else "random_walk"
-            shape = random.choice(["circle", "ellipse", "square"]) if typ == "shape" else "random_walk"
+            min_margin: float = tx / 10
 
             #
-            candidate = InitialContinentData(
-                type=typ,
-                shape=shape,
-                center_position_x=cx,
-                center_position_y=cy,
-                size=float(size),
-                nb_base_boundary_points=nb_base,
-                nb_int_boundary_points=nb_int,
-                nb_added_boundary_points=nb_added
-            )
+            cpx: int = int( random.uniform(min_margin + csize, tx - min_margin - csize) )
+            cpy: int = int( random.uniform(min_margin + csize, ty - min_margin - csize) )
 
             #
-            ### Overlap check: require center separation >= sum of radii + safety margin. ###
+            good: bool = True
+
             #
-            ok = True
-            #
-            for other in generated:
+            for prev in generated:
 
                 #
-                dx = candidate.center_position_x - other.center_position_x
-                dy = candidate.center_position_y - other.center_position_y
-                d = sqrt(dx * dx + dy * dy)
+                d: float = sqrt( ( cpx - prev[0] ) ** 2 + ( cpy - prev[1] ) ** 2 )
 
                 #
-                ### safety margin uses declared sizes plus a tunable extra (use dead_angle_min_border_points ###
-                ### & radius_border_points to be conservative). ###
-                #
-                safety = candidate.size + other.size + max(radius_border_points, dead_angle_min_border_points, 20)
-
-                #
-                if d < safety:
+                if d <= csize + prev[2]:
 
                     #
-                    ok = False
+                    good = False
+
+                    #
                     break
 
             #
-            if ok:
+            if not good:
 
                 #
-                generated.append(candidate)
-
-        #
-        ### If we failed to place all continents without overlap within attempts, fill the remaining ###
-        ### using a fallback layout (spread on a circle) — best-effort to avoid overlaps. ###
-        #
-        if len(generated) < nb_continents:
+                continue
 
             #
-            print( f"Warning: could not place all continents without overlap after {attempts} attempts."
-                    " Falling back to ring placement for remaining continents." )
+            initial_continents.append(
 
-            #
-            center_map_x = tx // 2
-            center_map_y = ty // 2
-            #
-            ring_radius = max(min(tx, ty) // 4, max_radius * 3)
-
-            #
-            while len(generated) < nb_continents:
-
-                #
-                angle = random.uniform(0, 2 * pi)
-                cx = int(center_map_x + ring_radius * cos(angle))
-                cy = int(center_map_y + ring_radius * sin(angle))
-                size = int(max(min_radius, max_radius * 0.6))
-                nb_base = max(6, int(size / 3))
-                nb_int = max(0, int(size / 2))
-                nb_added = max(0, int(nb_base / 3))
-                shape = random.choice(["circle", "ellipse", "square"])
-
-                #
-                generated.append(InitialContinentData(
-                    type="shape",
+                InitialContinentData(
+                    type=cont_type,
                     shape=shape,
-                    center_position_x=max(border_margin, min(tx - 1 - border_margin, cx)),
-                    center_position_y=max(border_margin, min(ty - 1 - border_margin, cy)),
-                    size=float(size),
-                    nb_base_boundary_points=nb_base,
-                    nb_int_boundary_points=nb_int,
-                    nb_added_boundary_points=nb_added
-                ))
+                    center_position_x=cpx,
+                    center_position_y=cpy,
+                    size=csize,
+                    nb_base_boundary_points=nbbpts,
+                    nb_int_boundary_points=nbipts,
+                    nb_added_boundary_points=nbapts,
+                )
 
-        #
-        initial_continents = generated
+            )
 
-    # -------------------------
-    # 3) Create continent polygons
-    # -------------------------
+            #
+            generated.append( (cpx, cpy, csize) )
 
     #
-    print("Creating continent polygons from initial descriptors (calling create_continent_polygon)...")
-    #
-    continent_polygons: list[lp.Polygon] = []
-
-    #
-    for cid, ic in enumerate(initial_continents):
-
-        #
-        print(f" - continent {cid+1}/{len(initial_continents)}: center=({ic.center_position_x},{ic.center_position_y}) size={ic.size} type={ic.type} shape={ic.shape}")
-        #
-        poly = create_continent_polygon(continent_id=cid, initial_continent_data=ic, all_points=all_points)
-        continent_polygons.append(poly)
-
-    #
-    print(f"Done: created {len(continent_polygons)} continent polygons.")
+    continent_polygons: list[lp.Polygon] = [
+        create_continent_polygon( continent_id=i, initial_continent_data=init_continent_data, all_points=all_points )
+        for i, init_continent_data in enumerate(initial_continents)
+    ]
 
     #
     ld.render_only_polygons(tx=tx, ty=ty, polygons=continent_polygons)
