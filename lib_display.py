@@ -232,6 +232,60 @@ def render_points_with_colors_from_points_areas_with_polygons(tx: int, ty: int, 
     plt.show()
 
 
+
+#
+### Render points with colors. ###
+#
+def render_only_polygons(tx: int, ty: int, polygons: list[lp.Polygon]) -> None:
+
+    #
+    ### Create a new plot. ###
+    #
+    plt.figure()
+
+    #
+    ### draw polygons. ###
+    #
+    if polygons:
+        #
+        for polygon in polygons:
+            #
+            if polygon.boundary.length == 0:
+                #
+                continue
+            #
+            x_coords = polygon.boundary.data[:polygon.boundary.length, 0]
+            y_coords = polygon.boundary.data[:polygon.boundary.length, 1]
+            #
+            ### Close the polygon by appending the first point to the end. ###
+            #
+            x_coords = np.append(x_coords, x_coords[0])
+            y_coords = np.append(y_coords, y_coords[0])
+            #
+            plt.plot(x_coords, y_coords, color='black', linewidth=1)
+
+    #
+    ### Set the title and labels. ###
+    #
+    plt.title("Rendered Polygons")
+    plt.xlabel("X-coordinate")
+    plt.ylabel("Y-coordinate")
+
+    # #
+    # ### Set the plot limits based on the translation values. ###
+    # #
+    # plt.xlim(tx - 10, tx + 10)
+    # plt.ylim(ty - 10, ty + 10)
+
+    #
+    ### Add a legend and display the plot. ###
+    #
+    # plt.legend()
+    # plt.grid(True)
+    # plt.gca().set_aspect('equal', adjustable='box')
+    plt.show()
+
+
 #
 ###
 #
