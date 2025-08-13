@@ -17,7 +17,7 @@ import lib_points as lp
 def init_plt() -> None:
 
     #
-    plt.axis([-50,50,0,10000])
+    # plt.axis([-50,50,0,10000])
     plt.ion()
     # plt.show()
 

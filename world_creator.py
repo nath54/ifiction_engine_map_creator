@@ -86,7 +86,7 @@ def generate_continent_points(
     #
     ### Very large continent. ###
     #
-    if continent_data.size > tx + ty / 2:
+    if continent_data.size > tx + ty / 8:
 
         #
         continent_superficy = random.randint(continent_superficy_min + dsmf * 3, continent_superficy_max)
@@ -94,7 +94,7 @@ def generate_continent_points(
     #
     ### Large continent. ###
     #
-    elif continent_data.size > tx + ty / 3:
+    elif continent_data.size > tx + ty / 14:
 
         #
         continent_superficy = random.randint(continent_superficy_min + dsmf * 2, continent_superficy_max - dsmf * 1)
@@ -102,7 +102,7 @@ def generate_continent_points(
     #
     ### Medium sized continent. ###
     #
-    elif continent_data.size > tx + ty / 5:
+    elif continent_data.size > tx + ty / 20:
 
         #
         continent_superficy = random.randint(continent_superficy_min + dsmf * 1, continent_superficy_max - dsmf * 2)
