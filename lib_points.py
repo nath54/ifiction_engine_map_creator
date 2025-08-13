@@ -33,9 +33,10 @@ def clamp(value: Any, minimum: Any, maximum: Any) -> Any:
 #
 ### Numpy data type for representing points. ###
 #
-point_type = np.int32  # Coordinates in a 2D grid, so integers for now.
+point_type = np.float32  # Coordinates in a 2D grid, so integers for now.
 #
 distance_type = np.float32  # Distances between points.
+points_weight_type = np.float32  # Factor of points.
 
 #
 ###
@@ -295,10 +296,10 @@ class Point:
     def param1(self, value: int) -> None:
         """Setter for the param1 value, with type validation."""
 
-        #
-        if not isinstance(value, int) and not isinstance(value, np.int32):  # type: ignore
-            #
-            raise TypeError(f"param1 must be an integer. Value asked to set param1 from = `{value}` of type `{type(value)}`")
+        # #
+        # if not isinstance(value, int) and not isinstance(value, np.int32):  # type: ignore
+        #     #
+        #     raise TypeError(f"param1 must be an integer. Value asked to set param1 from = `{value}` of type `{type(value)}`")
 
         #
         self.data[2] = value
@@ -322,10 +323,10 @@ class Point:
     def param2(self, value: int) -> None:
         """Setter for the param2 value, with type validation."""
 
-        #
-        if not isinstance(value, int) and not isinstance(value, np.int32):  # type: ignore
-            #
-            raise TypeError(f"param2 must be an integer. Value asked to set param2 from = `{value}` of type `{type(value)}`")
+        # #
+        # if not isinstance(value, int) and not isinstance(value, np.int32):  # type: ignore
+        #     #
+        #     raise TypeError(f"param2 must be an integer. Value asked to set param2 from = `{value}` of type `{type(value)}`")
 
         #
         self.data[3] = value
@@ -1365,16 +1366,26 @@ class Polygon:
         self.grid_context: LargePointsAreas = grid_context
         self.edge_grid: dict[str, list[int]] = {}
         #
-        self.min_x: int = 0
-        self.max_x: int = 0
-        self.min_y: int = 0
-        self.max_y: int = 0
+        self.min_x: float = 0
+        self.max_x: float = 0
+        self.min_y: float = 0
+        self.max_y: float = 0
+        #
+        ### This will store the list of triangles after triangulation. ###
+        #
+        self.triangles: Optional[list[PointCluster]] = None
+        self.triangle_areas: Optional[NDArray[np.float32]] = None
+        self.total_area: float = 0.0
 
         #
         if len(self.boundary) > 0:
             #
             self._calculate_bounding_box()
             self._precompute_edge_grid()
+            #
+            ### Pre-compute the triangulation for uniform point generation. ###
+            #
+            self._triangulate()
 
 
     #
@@ -1609,4 +1620,209 @@ class Polygon:
         #
         return intersections % 2 == 1
 
+    #
+    ### Triangulate the polygon using the Ear Clipping algorithm. ###
+    #
+    def _triangulate(self) -> None:
+        """
+        Decomposes a simple polygon into a set of triangles using the Ear
+        Clipping algorithm. This is a pre-computation step for generating
+        uniformly random points. The result is stored in self.triangles.
+        """
 
+        #
+        print("Triangulating polygon for uniform point generation...")
+
+        #
+        ### We need at least 3 vertices to form a polygon. ###
+        #
+        if len(self.boundary) < 3:
+            #
+            self.triangles = []
+            return
+
+        #
+        ### Create a mutable list of vertex indices. ###
+        #
+        remaining_indices = list(range(len(self.boundary)))
+        self.triangles = []
+
+        #
+        ### Helper to calculate 2D cross-product (determines orientation). ###
+        #
+        def cross_product(p1: Point, p2: Point, p3: Point) -> float:
+            #
+            return (p2.x - p1.x) * (p3.y - p1.y) - (p2.y - p1.y) * (p3.x - p1.x)
+
+        #
+        ### Ensure vertices are in counter-clockwise (CCW) order for the algorithm. ###
+        #
+        polygon_area = sum(cross_product(self.boundary[0], self.boundary[i], self.boundary[i + 1]) for i in range(1, len(self.boundary) - 1))
+        #
+        if polygon_area < 0:
+            #
+            ### Polygon is clockwise, reverse it. ###
+            #
+            remaining_indices.reverse()
+
+        #
+        ### Helper to check if a point is inside a triangle. ###
+        #
+        def is_point_in_triangle(pt: Point, v1: Point, v2: Point, v3: Point) -> bool:
+            #
+            d1 = cross_product(v1, v2, pt)
+            d2 = cross_product(v2, v3, pt)
+            d3 = cross_product(v3, v1, pt)
+            #
+            has_neg = (d1 < 0) or (d2 < 0) or (d3 < 0)
+            has_pos = (d1 > 0) or (d2 > 0) or (d3 > 0)
+            #
+            return not (has_neg and has_pos)
+
+        #
+        ### Main ear clipping loop. ###
+        #
+        while len(remaining_indices) > 3:
+
+            #
+            found_ear = False
+            #
+            for i in range(len(remaining_indices)):
+
+                #
+                prev_idx = remaining_indices[i - 1]
+                curr_idx = remaining_indices[i]
+                next_idx = remaining_indices[(i + 1) % len(remaining_indices)]
+
+                #
+                v_prev = self.boundary[prev_idx]
+                v_curr = self.boundary[curr_idx]
+                v_next = self.boundary[next_idx]
+
+                #
+                ### An ear must be a convex vertex in a CCW polygon. ###
+                #
+                if cross_product(v_prev, v_curr, v_next) <= 0:
+                    #
+                    continue # This is a reflex vertex, not an ear.
+
+                #
+                ### Check if any other remaining vertex is inside this potential ear. ###
+                #
+                is_valid_ear = True
+                #
+                for other_idx in remaining_indices:
+                    #
+                    if other_idx in (prev_idx, curr_idx, next_idx):
+                        #
+                        continue
+                    #
+                    if is_point_in_triangle(self.boundary[other_idx], v_prev, v_curr, v_next):
+                        #
+                        is_valid_ear = False
+                        break
+
+                #
+                if is_valid_ear:
+                    #
+                    ### Found an ear. Add it to our list and clip it. ###
+                    #
+                    ear = PointCluster(init_size=3)
+                    ear.append(v_prev)
+                    ear.append(v_curr)
+                    ear.append(v_next)
+                    self.triangles.append(ear)
+
+                    #
+                    ### Remove the ear's tip from the list of vertices. ###
+                    #
+                    remaining_indices.pop(i)
+                    found_ear = True
+                    break
+
+            #
+            ### If no ear was found, the polygon may be complex/self-intersecting. ###
+            #
+            if not found_ear:
+                #
+                # print("Warning: Ear clipping failed. The polygon may be self-intersecting.")
+                self.triangles = None # Indicate failure
+                return
+
+        #
+        ### Add the final remaining triangle. ###
+        #
+        final_triangle = PointCluster(init_size=3)
+        final_triangle.append(self.boundary[remaining_indices[0]])
+        final_triangle.append(self.boundary[remaining_indices[1]])
+        final_triangle.append(self.boundary[remaining_indices[2]])
+        self.triangles.append(final_triangle)
+
+        #
+        ### Pre-calculate areas for weighted random selection. ###
+        #
+        self.triangle_areas = np.array([
+            0.5 * abs(cross_product(t[0], t[1], t[2])) for t in self.triangles
+        ], dtype=np.float32)
+        #
+        self.total_area = float( np.sum(self.triangle_areas) )
+
+        #
+        print(f"Triangulation complete. Found {len(self.triangles)} triangles.")
+
+
+    #
+    ### Generate a uniformly random point inside the polygon. ###
+    #
+    def generate_random_point_uniformly(self) -> Optional[Point]:
+        """
+        Generates a uniformly distributed random point within the polygon.
+        It does so by first picking a triangle (weighted by area) and then
+        generating a random point within that triangle.
+
+        Returns:
+            A Point object inside the polygon, or None if triangulation failed.
+        """
+
+        #
+        ### Ensure triangulation was successful. ###
+        #
+        if self.triangles is None or self.total_area == 0 or self.triangle_areas is None:
+            #
+            return None
+
+        #
+        ### 1. Select a triangle, weighted by its area. ###
+        #
+        probabilities = self.triangle_areas / self.total_area
+        chosen_index = np.random.choice(len(self.triangles), p=probabilities)
+        chosen_triangle = self.triangles[chosen_index]
+
+        #
+        v1, v2, v3 = chosen_triangle.data[0], chosen_triangle.data[1], chosen_triangle.data[2]
+
+        #
+        ### 2. Generate a random point within the chosen triangle. ###
+        #
+        s, t = np.random.rand(2)
+        if s + t > 1.0:
+            #
+            s = 1.0 - s
+            t = 1.0 - t
+
+        #
+        ### Calculate the point using barycentric coordinates. ###
+        # P = V1 + s*(V2-V1) + t*(V3-V1)
+        #
+        point = Point( from_data = ( v1 + (v2 - v1) * s + (v3 - v1) * t ) )
+
+        #
+        ### Ensure correct data type if integers are required. ###
+        #
+        if point_type is np.int32:  # type: ignore
+            #
+            point.x = round(point.x)
+            point.y = round(point.y)
+
+        #
+        return point

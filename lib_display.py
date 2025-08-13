@@ -232,7 +232,6 @@ def render_points_with_colors_from_points_areas_with_polygons(tx: int, ty: int, 
     plt.show()
 
 
-
 #
 ### Render points with colors. ###
 #

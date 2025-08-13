@@ -5,8 +5,6 @@ import random
 #
 from math import floor, ceil, pi, cos, sin, sqrt
 #
-import numpy as np  # type: ignore
-#
 from tqdm import tqdm
 #
 import lib_points as lp
@@ -43,76 +41,118 @@ class InitialContinentData:
 
 
 #
+def convert_list_points_large_points_area(pts: list[lp.Point]) -> lp.LargePointsAreas:
+
+    #
+    pts_area: lp.LargePointsAreas = lp.LargePointsAreas()
+
+    #
+    for p in pts:
+
+        #
+        pts_area.append( p )
+
+    #
+    return pts_area
+
+
+#
 def generate_continent_points(
-        nb_continents: int = 4,
-        tx: int = 2048,
-        ty: int = 2048,
+        continent_polygon: lp.Polygon,
+        continent_data: InitialContinentData,
+        nb_initial_points: int = 10,
+        initial_points_strength: int = 10,
+        nb_per_points_generated: int = 10,
         continent_superficy_min: int = 10,
         continent_superficy_max: int = 100,
         dist_between_points: int = 40,
-        border_margin: int = 300
     ) -> list[ lp.Point ]:
 
     #
     points: list[ lp.Point ] = []
 
     #
-    for _continent_id in range(nb_continents):
+    continent_superficy = random.randint(continent_superficy_min, continent_superficy_max)
+
+    #
+    base_tots: float = 0
+
+    #
+    print(f"Generating {nb_initial_points} initial points...")
+    #
+    for _ in range(nb_initial_points):
 
         #
-        print(f"Continent : {_continent_id + 1} / {nb_continents}")
+        p: lp.Point = continent_polygon.generate_random_point_uniformly()
 
         #
-        continent_center_x = random.randint(border_margin, tx-1-border_margin)
-        continent_center_y = random.randint(border_margin, ty-1-border_margin)
-
-        #
-        continent_superficy = random.randint(continent_superficy_min, continent_superficy_max)
-
-        #
-        base_tots: int = 1
-
-        #
-        points.append( lp.Point(x=continent_center_x, y=continent_center_y, params=[1, 0]) )
-
-        #
-        for _ in tqdm(range(continent_superficy)):
+        if p is None:
 
             #
-            base_c_pt_id: int = 0
+            continue
 
+        #
+        p.param1 = initial_points_strength
+
+        #
+        points.append( p )
+
+        #
+        base_tots += initial_points_strength
+
+    #
+    print(f"Generating {continent_superficy} more continent points...")
+    #
+    for _ in tqdm(range(continent_superficy)):
+
+        #
+        base_c_pt_id: int = 0
+
+        #
+        base_tire: float = random.uniform(0.0, base_tots)
+        #
+        crt_base: float = 0
+        #
+        for base_id, base_pt in enumerate(points):
             #
-            base_tire: int = random.randint(0, base_tots)
+            crt_base += base_pt.param1
             #
-            crt_base: int = 0
-            #
-            for base_id, base_pt in enumerate(points):
+            if base_tire <= crt_base:
                 #
-                crt_base += base_pt.param1
-                #
-                if base_tire <= crt_base:
-                    #
-                    base_c_pt_id = base_id
+                base_c_pt_id = base_id
+
+        #
+        mini_point: lp.Point = lp.Point( x=0, y=0 )
+        mini_dist: float = float("inf")
+
+        #
+        for _ in range(nb_per_points_generated):
 
             #
-            points[base_c_pt_id].param1 += 1
-            base_tots += 1
+            pt: lp.Point = continent_polygon.generate_random_point_uniformly()
 
             #
-            new_px: int = max(0, min(tx, points[base_c_pt_id].x + random.randint(-dist_between_points, dist_between_points)))
-            new_py: int = max(0, min(ty, points[base_c_pt_id].y + random.randint(-dist_between_points, dist_between_points)))
-
-            #
-            ### Reduce the probability of inside border margin. ###
-            #
-            if new_px < border_margin or new_px > tx - border_margin or new_py < border_margin or new_py > ty - border_margin:
+            if pt is None:
 
                 #
-                new_px = max(0, min(tx, points[base_c_pt_id].x + random.randint(-dist_between_points, dist_between_points)))
-                new_py = max(0, min(ty, points[base_c_pt_id].y + random.randint(-dist_between_points, dist_between_points)))
+                continue
 
             #
-            points.append( lp.Point(x=new_px, y=new_py, params=[0, 0]) )
+            dist: float = pt.calculate_distance( points[base_c_pt_id] )
+
+            #
+            if dist < mini_dist:
+
+                #
+                mini_point = pt
+                mini_dist = dist
+
+        #
+        points.append( mini_point )
+
+        #
+        points[base_c_pt_id].param1 += 1
+        base_tots += 1
 
     #
     return points
@@ -777,18 +817,18 @@ def create_continent_polygon(continent_id: int, initial_continent_data: InitialC
 def terrain_generator(
         tx: int = 2048,
         ty: int = 2048,
-        nb_continents: int = 4,
+        nb_initial_points: int = 10,
+        initial_points_strength: int = 20,
+        nb_per_points_generated: int = 40,
         continent_superficy_min: int = 100,
         continent_superficy_max: int = 1000,
         dist_between_points: int = 20,
-        treshold_point_continent_distance: float = 40,
-        border_margin: int = 300,
-        radius_border_points: float = 60,
-        dead_angle_min_border_points: float = 100,
-        radius_between_border_points: float = 1,
-        search_radius_factor: float = 0.2,
         initial_continents: list[InitialContinentData] = []
     ) -> None:
+
+    #
+    ### -------- STEP 0: generate continent polygons. -------- ###
+    #
 
     #
     all_points: lp.LargePointsAreas = lp.LargePointsAreas()
@@ -878,6 +918,43 @@ def terrain_generator(
 
     #
     ld.render_only_polygons(tx=tx, ty=ty, polygons=continent_polygons)
+
+
+    #
+    ### -------- STEP 1: generate continent points. -------- ###
+    #
+
+    #
+    n_continents: int = len(continent_polygons)
+
+    #
+    continent_points: list[ lp.LargePointsAreas ] = [
+
+        convert_list_points_large_points_area(
+            generate_continent_points(
+                continent_polygon=continent_polygons[i],
+                continent_data=initial_continents[i],
+                nb_initial_points=nb_initial_points,
+                initial_points_strength=initial_points_strength,
+                nb_per_points_generated=nb_per_points_generated,
+                continent_superficy_min=continent_superficy_min,
+                continent_superficy_max=continent_superficy_max,
+                dist_between_points=dist_between_points
+            )
+        )
+
+        for i in range(n_continents)
+
+    ]
+
+    #
+    ld.render_points_with_colors_from_points_areas_with_polygons(
+        tx=tx,
+        ty=ty,
+        point_clusters=continent_points,
+        colors=ld.generate_random_colors( n = n_continents ),
+        polygons=continent_polygons
+    )
 
     # TODO: Generate continent points inside continents polygons
 
