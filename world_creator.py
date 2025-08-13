@@ -5,10 +5,42 @@ import random
 #
 from math import floor, ceil, pi, cos, sin, sqrt
 #
+import numpy as np
+from numpy.typing import NDArray
+#
 from tqdm import tqdm
 #
 import lib_points as lp
 import lib_display as ld  # type: ignore
+
+
+#
+### Point explanation:                                          ###
+###     - x = x                                                 ###
+###     - y = y                                                 ###
+###     - param1 = used for points generation, point weight.    ###
+###     - param2 = is a border point or not. (0=false, 1=true)  ###
+###     - param3 = terrain elevation (in meters).               ###
+###     - param4 = is a river points. (0=false, 1=true)         ###
+###     - param5 = forest density. (tree per km²)               ###
+###     - param6 = terrain type.                                ###
+###     - param7 = city id (default 0 = no city).               ###
+#
+
+
+#
+terrain_types: dict[int, str] = {
+    0: "plain",
+    1: "beach",
+    2: "hill",
+    3: "mountain",
+    4: "high mountain",
+    5: "volcano",
+    6: "ice mountains",
+    7: "ice plain",
+    8: "swamp",
+    9: "desert",
+}
 
 
 #
@@ -86,7 +118,7 @@ def generate_continent_points(
     #
     ### Very large continent. ###
     #
-    if continent_data.size > tx + ty / 8:
+    if continent_data.size > tx / 10:
 
         #
         continent_superficy = random.randint(continent_superficy_min + dsmf * 3, continent_superficy_max)
@@ -94,7 +126,7 @@ def generate_continent_points(
     #
     ### Large continent. ###
     #
-    elif continent_data.size > tx + ty / 14:
+    elif continent_data.size > tx / 30:
 
         #
         continent_superficy = random.randint(continent_superficy_min + dsmf * 2, continent_superficy_max - dsmf * 1)
@@ -102,7 +134,7 @@ def generate_continent_points(
     #
     ### Medium sized continent. ###
     #
-    elif continent_data.size > tx + ty / 20:
+    elif continent_data.size > tx / 60:
 
         #
         continent_superficy = random.randint(continent_superficy_min + dsmf * 1, continent_superficy_max - dsmf * 2)
@@ -197,106 +229,6 @@ def generate_continent_points(
 
     #
     return points
-
-
-#
-def create_cluster_of_points(
-        points: list[ lp.Point ],
-        nb_continents: int,
-        treshold_point_continent_distance: float = 100
-    ) -> list[ lp.LargePointsAreas ]:
-
-    #
-    continents_points: list[ lp.LargePointsAreas ] = []
-
-    #
-    print(f"Distribute all the {len(points)} points in continents.")
-    #
-    p: lp.Point
-    #
-    for p in tqdm( points ):
-
-        #
-        ### Try to find the continent id to add the point to. ###
-        #
-        continents_distances: list[ tuple[int, float] ] = []
-
-        #
-        cid: int
-        cpts: lp.LargePointsAreas
-        #
-        for cid, cpts in enumerate( continents_points ):
-
-            #
-            dist_to_continent: float = cpts.distance_from_point( point=p )
-
-            #
-            if dist_to_continent < treshold_point_continent_distance:
-
-                #
-                continents_distances.append( (cid, dist_to_continent) )
-
-        #
-        ### If not continents close enough from current point. ###
-        #
-        if len( continents_distances ) == 0:
-
-            #
-            ### Create a new cluster of points for a new continent. ###
-            #
-            continents_points.append(
-                lp.LargePointsAreas()
-            )
-
-            #
-            continents_points[-1].append( value=p )
-
-        #
-        ### If ONE continent has been found. ###
-        #
-        elif len(continents_distances) == 1:
-
-            #
-            continents_points[continents_distances[0][0]].append( value=p )
-
-        #
-        ### MULTIPLE continents to merge. ###
-        #
-        else:
-
-            #
-            ### Sort the continents cluster index to inverse growing order so we will be able to pop without shifting. ###
-            #
-            continents_distances.sort( key = lambda x: x[0], reverse=True )
-
-            #
-            ### MERGE all the continents to merge. ###
-            #
-            new_continent: lp.LargePointsAreas = continents_points[continents_distances[0][0]].__add__( continents_points[continents_distances[1][0]] )
-
-            #
-            for cdts in continents_distances[2:]:
-
-                #
-                new_continent = new_continent.__add__( continents_points[cdts[0]] )
-
-            #
-            ### Removing all the previous continents. ###
-            #
-            for cdts in continents_distances:
-
-                #
-                continents_points.pop( cdts[0] )
-
-            #
-            ### Adding the new final continent. ###
-            #
-            continents_points.append( new_continent )
-
-    #
-    ### . ###
-    #
-    return continents_points
 
 
 #
@@ -858,6 +790,7 @@ def create_continent_polygon(continent_id: int, initial_continent_data: InitialC
 def terrain_generator(
         tx: int = 2048,
         ty: int = 2048,
+        initial_continents_attemps: int = 20,
         nb_initial_points: int = 10,
         initial_points_strength: int = 20,
         nb_per_points_generated: int = 40,
@@ -872,7 +805,7 @@ def terrain_generator(
     #
 
     #
-    all_points: lp.LargePointsAreas = lp.LargePointsAreas()
+    all_points_for_heightmap: lp.LargePointsAreas = lp.LargePointsAreas()
 
     #
     if not initial_continents:
@@ -883,7 +816,7 @@ def terrain_generator(
         #
         print("No initial_continents provided: generating random initial continent descriptors...")
         #
-        for _ in range(20):
+        for _ in range(initial_continents_attemps):
 
             #
             t: bool = False if random.uniform(0, 1) <= 0.6 else True
@@ -953,7 +886,7 @@ def terrain_generator(
 
     #
     continent_polygons: list[lp.Polygon] = [
-        create_continent_polygon( continent_id=i, initial_continent_data=init_continent_data, all_points=all_points )
+        create_continent_polygon( continent_id=i, initial_continent_data=init_continent_data, all_points=all_points_for_heightmap )
         for i, init_continent_data in enumerate(initial_continents)
     ]
 
@@ -1003,14 +936,190 @@ def terrain_generator(
     #
     ### -------- STEP 2: generate continent heightmap. -------- ###
     #
+
+    #
+    ### Initialize for all the points in the world to prepare to render the heightmap. ###
+    #
+    all_points_for_heightmap: lp.LargePointsAreas = lp.LargePointsAreas()
+
+    #
+    ### For all continents. ###
+    #
+
+    #
     c_id: int
     #
     for c_id, cpolygon in enumerate(continent_polygons):
 
         #
-        pass
+        ### TODO: set param3 the elevation of all the points. ###
+        ### TODO: elevation values are in meter. So make plains, beachs low toward 0, hills to 100 ~ 500 meters and mountains to 1k ~ 6k high for instance. ###
+        ### TODO: create logical mountains chains, hills and plains and all the other terrain types. ###
+        ### TODO: initial polygon points have an elevation of 0 because of default beach type. ###
 
-    # TODO: Generate continent points inside continents polygons
+        #
+        ### Border points to 0 of elevation. ###
+        #
+        p: lp.Point
+        #
+        for p in cpolygon.boundary:
+
+            #
+            p.param3 = 0
+
+            #
+            all_points_for_heightmap.append( p )
+
+        #
+        ### Inside points to hills, mountains and plains. ###
+        #
+        for p in continent_points[c_id]:
+
+            # TODO: good conditions to be mountains, hills, plains, beach, forest, desert, city, etc...
+
+            #
+            terrain_type: str = random.choice( [
+                "very high mountains",
+                "high mountains",
+                "mid mountains",
+                "low mountains",
+                "hills",
+                "swamps",
+                "forest",
+                "mountain forest",
+                "plains",
+                "city",
+                "desert",
+                "beach",
+            ] )
+
+
+            if terrain_type == "very high mountains":
+                #
+                p.param3 = random.uniform(4500, 6000)
+
+            if terrain_type == "high mountains":
+                #
+                p.param3 = random.uniform(2500, 5000)
+
+            if terrain_type == "mid mountains":
+                #
+                p.param3 = random.uniform(1000, 3000)
+
+            if terrain_type == "low mountains":
+                #
+                p.param3 = random.uniform(500, 1500)
+
+            if terrain_type == "hills":
+                #
+                p.param3 = random.uniform(150, 500)
+
+            if terrain_type == "swamps":
+                #
+                p.param3 = random.uniform(-50, 50)
+
+            if terrain_type == "plains":
+                #
+                p.param3 = random.uniform(0, 50)
+
+            if terrain_type == "desert":
+                #
+                p.param3 = random.uniform(0, 50)
+
+            if terrain_type == "beach":
+                #
+                p.param3 = random.uniform(0, 10)
+
+            #
+            all_points_for_heightmap.append( p )
+
+
+    #
+    ### Generate an heightmap texture for all the planet. ###
+    #
+    arr: NDArray[np.float32] = np.zeros( shape=(tx, ty), dtype=np.float32 )
+
+    #
+    previous_in_poly_id: int = -1
+
+    #
+    for x in range(tx):
+
+        #
+        for y in range(ty):
+
+            #
+            crt_p: lp.Point = lp.Point( x=x, y=y )
+
+            #
+            in_poly_id: int = -1
+
+            #
+            if previous_in_poly_id != -1 and continent_polygons[previous_in_poly_id].__contains__(crt_p):
+
+                #
+                in_poly_id = previous_in_poly_id
+
+            #
+            else:
+
+                #
+                for c_id, cpoly in enumerate( continent_polygons ):
+
+                    #
+                    if c_id == previous_in_poly_id:
+
+                        #
+                        continue
+
+                    #
+                    if cpoly.__contains__(crt_p):
+
+                        #
+                        in_poly_id: int = c_id
+                        #
+                        break
+
+            #
+            ### Default: Water. ###
+            #
+            crt_elevation: float = -1000
+
+            #
+            if in_poly_id >= 0:
+
+                #
+                pts: list[lp.Point] = all_points_for_heightmap.get_all_points_in_circle( point=lp.Point( x=x, y=y ), radius=tx/10 )
+
+                #
+                total_distances: float = 0
+                #
+                crt_elevation = 0
+
+                #
+                for p in pts:
+
+                    #
+                    dst: float = p.calculate_distance( crt_p )
+
+                    #
+                    total_distances += dst
+
+                    #
+                    crt_elevation += p.param3 * dst
+
+                #
+                crt_elevation /= total_distances
+
+            #
+            arr[x, y] = crt_elevation
+
+    #
+    ld.draw_heightmaps( arr=arr )
+
+    #
+    ### -------- STEP 3: More natural  -------- ###
+    #
 
     # TODO: Add mountains, rivers, lakes, lands to continents. (rivers must have branches, and etc...). Separate ocean from continents.
 

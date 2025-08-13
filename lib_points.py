@@ -41,7 +41,7 @@ points_weight_type = np.float32  # Factor of points.
 #
 ###
 #
-NB_PTS_PARAMS: int = 2
+NB_PTS_PARAMS: int = 7
 
 #
 ### Default values for magic_methods_to_delegate. ###

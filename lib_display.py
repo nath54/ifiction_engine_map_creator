@@ -2,9 +2,12 @@
 #
 ### Import modules. ###
 #
+from typing import Any
+#
 import random
 #
 import numpy as np
+from numpy.typing import NDArray
 #
 from matplotlib import pyplot as plt
 #
@@ -21,6 +24,7 @@ def init_plt() -> None:
     plt.ion()
     # plt.show()
 
+
 #
 ### End user input to quit. ###
 #
@@ -28,6 +32,7 @@ def quit_plt() -> None:
 
     #
     input("[ -- PRESS ENTER TO QUIT -- ]")
+
 
 #
 ### Render points. ###
@@ -312,6 +317,15 @@ def render_only_polygons(tx: int, ty: int, polygons: list[lp.Polygon]) -> None:
     # plt.show()
     plt.draw()
     plt.pause(0.001)
+
+
+#
+### Render np array as greyscale. ###
+#
+def draw_heightmaps( arr: NDArray[np.floating] ) -> None:
+
+    #
+    plt.imshow( arr, cmap="greyscale" )
 
 
 #
