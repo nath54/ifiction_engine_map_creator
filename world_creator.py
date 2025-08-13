@@ -677,23 +677,24 @@ def add_details_to_polygon_borders(continent_id: int, initial_continent_data: In
         n: int = len(continents_boundary_points)
 
         #
-        idx_to_insert: int = random.randint(0, n-2)
+        idx_to_insert: int = random.randint(1, n)
 
         #
-        p1: lp.Point = continents_boundary_points[idx_to_insert]
-        p2: lp.Point = continents_boundary_points[idx_to_insert+1]
+        p1: lp.Point = continents_boundary_points[idx_to_insert-1]
+        p2: lp.Point = continents_boundary_points[idx_to_insert%n]
 
         #
-        pc: lp.Point = ( p1 + p2 ) / 2
-        pd: float = p1.calculate_distance( p2 ) / (1000 * sqrt(2))
-        pd: float = 1
+        npx: int = (p1.x + p2.x) / 2
+        npy: int = (p1.y + p2.y) / 2
+        #
+        pd: float = p1.calculate_distance( p2 ) / (5 * sqrt(2))
 
         #
         dx: int = round( random.uniform(-pd, pd) )
         dy: int = round( random.uniform(-pd, pd) )
 
         #
-        new_point: lp.Point = pc + lp.Point( x=dx, y=dy )
+        new_point: lp.Point = lp.Point( x = ( npx + dx ) , y = ( npy + dy ) )
 
         #
         continents_boundary_points.insert( idx_to_insert, new_point )
@@ -814,7 +815,7 @@ def terrain_generator(
             #
             nbbpts: int = random.randint(4, 10)
             nbipts: int = random.randint(1, 6)
-            nbapts: int = random.randint(0, 10)
+            nbapts: int = random.randint(100, 1000)
 
             #
             csize: float = random.uniform(tx/100, tx/4)
