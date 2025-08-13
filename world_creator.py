@@ -58,6 +58,8 @@ def convert_list_points_large_points_area(pts: list[lp.Point]) -> lp.LargePoints
 
 #
 def generate_continent_points(
+        tx: int,
+        ty: int,
         continent_polygon: lp.Polygon,
         continent_data: InitialContinentData,
         nb_initial_points: int = 10,
@@ -72,7 +74,46 @@ def generate_continent_points(
     points: list[ lp.Point ] = []
 
     #
-    continent_superficy = random.randint(continent_superficy_min, continent_superficy_max)
+    ###
+    #
+    dsm: int = continent_superficy_max - continent_superficy_min
+    #
+    dsmf: int = dsm // 4
+
+    #
+    continent_superficy: int
+
+    #
+    ### Very large continent. ###
+    #
+    if continent_data.size > tx + ty / 2:
+
+        #
+        continent_superficy = random.randint(continent_superficy_min + dsmf * 3, continent_superficy_max)
+
+    #
+    ### Large continent. ###
+    #
+    elif continent_data.size > tx + ty / 3:
+
+        #
+        continent_superficy = random.randint(continent_superficy_min + dsmf * 2, continent_superficy_max - dsmf * 1)
+
+    #
+    ### Medium sized continent. ###
+    #
+    elif continent_data.size > tx + ty / 5:
+
+        #
+        continent_superficy = random.randint(continent_superficy_min + dsmf * 1, continent_superficy_max - dsmf * 2)
+
+    #
+    ### Small continent. ###
+    #
+    else:
+
+        #
+        continent_superficy = random.randint(continent_superficy_min, continent_superficy_max - dsmf * 3)
 
     #
     base_tots: float = 0
@@ -842,7 +883,7 @@ def terrain_generator(
         #
         print("No initial_continents provided: generating random initial continent descriptors...")
         #
-        for _ in range(10):
+        for _ in range(20):
 
             #
             t: bool = False if random.uniform(0, 1) <= 0.6 else True
@@ -917,7 +958,7 @@ def terrain_generator(
     ]
 
     #
-    ld.render_only_polygons(tx=tx, ty=ty, polygons=continent_polygons)
+    # ld.render_only_polygons(tx=tx, ty=ty, polygons=continent_polygons)
 
 
     #
@@ -932,6 +973,8 @@ def terrain_generator(
 
         convert_list_points_large_points_area(
             generate_continent_points(
+                tx=tx,
+                ty=ty,
                 continent_polygon=continent_polygons[i],
                 continent_data=initial_continents[i],
                 nb_initial_points=nb_initial_points,
@@ -956,6 +999,17 @@ def terrain_generator(
         polygons=continent_polygons
     )
 
+
+    #
+    ### -------- STEP 2: generate continent heightmap. -------- ###
+    #
+    c_id: int
+    #
+    for c_id, cpolygon in enumerate(continent_polygons):
+
+        #
+        pass
+
     # TODO: Generate continent points inside continents polygons
 
     # TODO: Add mountains, rivers, lakes, lands to continents. (rivers must have branches, and etc...). Separate ocean from continents.
@@ -973,4 +1027,11 @@ def terrain_generator(
 if __name__ == "__main__":
 
     #
+    ld.init_plt()
+
+    #
     terrain_generator()
+
+    #
+    ld.quit_plt()
+

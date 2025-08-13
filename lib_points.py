@@ -53,7 +53,6 @@ default_value_magic_methods_to_delegate: list[str] = [
     "__radd__", "__rsub__", "__rmul__", "__rtruediv__", "__rfloordiv__", "__rmod__", "__rpow__"
 ]
 
-
 #
 ### delegate_magic_methods_to_numpy. ###
 #
@@ -177,6 +176,64 @@ def delegate_magic_methods_to_numpy(magic_methods_to_delegate: list[str] = defau
                 setattr(cls, name, make_method_that_returns_directly(name))
 
         #
+        ### Automatize the creation of setters and getters for param1, param2, ..., paramN. ###
+        #
+        for i in range(1, NB_PTS_PARAMS + 1):
+
+            #
+            param_name: str = f"param{i}"
+            data_index: int = 1 + i  # x=0, y=1, param1=2, param2=3, ...
+
+            #
+            ### Create getter function. ###
+            #
+            def make_param_getter(index: int) -> Callable[[Any], int]:
+                """Factory function to create getter for paramN."""
+
+                #
+                def param_getter(self: Any) -> int:
+                    """Getter for the paramN value."""
+
+                    #
+                    return self.data[index]
+
+                #
+                return param_getter
+
+            #
+            ### Create setter function. ###
+            #
+            def make_param_setter(index: int) -> Callable[[Any, int], None]:
+                """Factory function to create setter for paramN."""
+
+                #
+                def param_setter(self: Any, value: int) -> None:
+                    """Setter for the paramN value, with type validation."""
+
+                    # #
+                    # if not isinstance(value, int) and not isinstance(value, np.int32):  # type: ignore
+                    #     #
+                    #     raise TypeError(f"{param_name} must be an integer. Value asked to set {param_name} from = `{value}` of type `{type(value)}`")
+
+                    #
+                    self.data[index] = value
+
+                #
+                return param_setter
+
+            #
+            ### Create and set the property. ###
+            #
+            param_property = property(
+                fget=make_param_getter(data_index),
+                fset=make_param_setter(data_index),
+                doc=f"Getter and setter for the {param_name} value."
+            )
+
+            #
+            setattr(cls, param_name, param_property)
+
+        #
         return cls
 
     #
@@ -276,60 +333,6 @@ class Point:
 
         #
         self.data[1] = value
-
-
-    #
-    ### param1 getter. ###
-    #
-    @property
-    def param1(self) -> int:
-        """Getter for the param1 value."""
-
-        #
-        return self.data[2]
-
-
-    #
-    ### param1 setter. ###
-    #
-    @param1.setter
-    def param1(self, value: int) -> None:
-        """Setter for the param1 value, with type validation."""
-
-        # #
-        # if not isinstance(value, int) and not isinstance(value, np.int32):  # type: ignore
-        #     #
-        #     raise TypeError(f"param1 must be an integer. Value asked to set param1 from = `{value}` of type `{type(value)}`")
-
-        #
-        self.data[2] = value
-
-
-    #
-    ### param2 getter. ###
-    #
-    @property
-    def param2(self) -> int:
-        """Getter for the param2 value."""
-
-        #
-        return self.data[3]
-
-
-    #
-    ### param2 setter. ###
-    #
-    @param2.setter
-    def param2(self, value: int) -> None:
-        """Setter for the param2 value, with type validation."""
-
-        # #
-        # if not isinstance(value, int) and not isinstance(value, np.int32):  # type: ignore
-        #     #
-        #     raise TypeError(f"param2 must be an integer. Value asked to set param2 from = `{value}` of type `{type(value)}`")
-
-        #
-        self.data[3] = value
 
 
     #
@@ -1826,3 +1829,4 @@ class Polygon:
 
         #
         return point
+

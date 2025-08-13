@@ -10,6 +10,25 @@ from matplotlib import pyplot as plt
 #
 import lib_points as lp
 
+
+#
+### Initialize Pyplot. ###
+#
+def init_plt() -> None:
+
+    #
+    plt.axis([-50,50,0,10000])
+    plt.ion()
+    # plt.show()
+
+#
+### End user input to quit. ###
+#
+def quit_plt() -> None:
+
+    #
+    input("[ -- PRESS ENTER TO QUIT -- ]")
+
 #
 ### Render points. ###
 #
@@ -44,7 +63,9 @@ def render_points_from_clusters(tx: int, ty: int, points: lp.PointCluster) -> No
     #
     # plt.grid(True)
     # plt.gca().set_aspect('equal', adjustable='box')
-    plt.show()
+    # plt.show()
+    plt.draw()
+    plt.pause(0.001)
 
 
 #
@@ -100,7 +121,9 @@ def render_points_with_colors_from_clusters(tx: int, ty: int, point_clusters: li
     # plt.legend()
     # plt.grid(True)
     # plt.gca().set_aspect('equal', adjustable='box')
-    plt.show()
+    # plt.show()
+    plt.draw()
+    plt.pause(0.001)
 
 
 #
@@ -136,7 +159,9 @@ def render_points_from_points_areas(tx: int, ty: int, points: lp.LargePointsArea
     #
     # plt.grid(True)
     # plt.gca().set_aspect('equal', adjustable='box')
-    plt.show()
+    # plt.show()
+    plt.draw()
+    plt.pause(0.001)
 
 
 #
@@ -229,7 +254,9 @@ def render_points_with_colors_from_points_areas_with_polygons(tx: int, ty: int, 
     # plt.legend()
     # plt.grid(True)
     # plt.gca().set_aspect('equal', adjustable='box')
-    plt.show()
+    # plt.show()
+    plt.draw()
+    plt.pause(0.001)
 
 
 #
@@ -282,7 +309,9 @@ def render_only_polygons(tx: int, ty: int, polygons: list[lp.Polygon]) -> None:
     # plt.legend()
     # plt.grid(True)
     # plt.gca().set_aspect('equal', adjustable='box')
-    plt.show()
+    # plt.show()
+    plt.draw()
+    plt.pause(0.001)
 
 
 #
