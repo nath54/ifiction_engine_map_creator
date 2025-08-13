@@ -21,26 +21,8 @@ import lib_display as ld  # type: ignore
 ###     - param1 = used for points generation, point weight.    ###
 ###     - param2 = is a border point or not. (0=false, 1=true)  ###
 ###     - param3 = terrain elevation (in meters).               ###
-###     - param4 = is a river points. (0=false, 1=true)         ###
-###     - param5 = forest density. (tree per km²)               ###
-###     - param6 = terrain type.                                ###
-###     - param7 = city id (default 0 = no city).               ###
+###     - param4 = city id (default 0 = no city).               ###
 #
-
-
-#
-terrain_types: dict[int, str] = {
-    0: "plain",
-    1: "beach",
-    2: "hill",
-    3: "mountain",
-    4: "high mountain",
-    5: "volcano",
-    6: "ice mountains",
-    7: "ice plain",
-    8: "swamp",
-    9: "desert",
-}
 
 
 #
@@ -975,60 +957,8 @@ def terrain_generator(
         #
         for p in continent_points[c_id]:
 
-            # TODO: good conditions to be mountains, hills, plains, beach, forest, desert, city, etc...
-
             #
-            terrain_type: str = random.choice( [
-                "very high mountains",
-                "high mountains",
-                "mid mountains",
-                "low mountains",
-                "hills",
-                "swamps",
-                "forest",
-                "mountain forest",
-                "plains",
-                "city",
-                "desert",
-                "beach",
-            ] )
-
-
-            if terrain_type == "very high mountains":
-                #
-                p.param3 = random.uniform(4500, 6000)
-
-            if terrain_type == "high mountains":
-                #
-                p.param3 = random.uniform(2500, 5000)
-
-            if terrain_type == "mid mountains":
-                #
-                p.param3 = random.uniform(1000, 3000)
-
-            if terrain_type == "low mountains":
-                #
-                p.param3 = random.uniform(500, 1500)
-
-            if terrain_type == "hills":
-                #
-                p.param3 = random.uniform(150, 500)
-
-            if terrain_type == "swamps":
-                #
-                p.param3 = random.uniform(-50, 50)
-
-            if terrain_type == "plains":
-                #
-                p.param3 = random.uniform(0, 50)
-
-            if terrain_type == "desert":
-                #
-                p.param3 = random.uniform(0, 50)
-
-            if terrain_type == "beach":
-                #
-                p.param3 = random.uniform(0, 10)
+            p.param3 = random.randint( 10 * p.param1 ** 2, 100 * p.param1 ** 2 )
 
             #
             all_points_for_heightmap.append( p )
@@ -1041,6 +971,9 @@ def terrain_generator(
 
     #
     previous_in_poly_id: int = -1
+
+    #
+    pbar = tqdm( total = tx * ty )
 
     #
     for x in range(tx):
@@ -1113,6 +1046,12 @@ def terrain_generator(
 
             #
             arr[x, y] = crt_elevation
+
+            #
+            pbar.update( n=1 )
+
+    #
+    pbar.close()
 
     #
     ld.draw_heightmaps( arr=arr )

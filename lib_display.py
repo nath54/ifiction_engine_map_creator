@@ -138,7 +138,8 @@ def render_points_from_points_areas(tx: int, ty: int, points: lp.LargePointsArea
     #
     ### Unpack the x and y coordinates from the PointCluster data. ###
     #
-    x_coords, y_coords = points.get_separate_coordinates_for_all_points()
+    data = points.get_separate_coordinates_for_all_points()
+    x_coords, y_coords = data[0], data[1]
 
     #
     ### Create a scatter plot. ###
@@ -195,7 +196,11 @@ def render_points_with_colors_from_points_areas_with_polygons(tx: int, ty: int, 
         #
         if cluster.length > 0:
             #
-            x_coords, y_coords, _, is_border_point = cluster.get_separate_coordinates_for_all_points()
+            data = cluster.get_separate_coordinates_for_all_points()
+
+            #
+            x_coords = data[0]
+            y_coords = data[1]
 
             #
             x_coords_non_border: list[float] = []
