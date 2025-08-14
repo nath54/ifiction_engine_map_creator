@@ -8,7 +8,7 @@ from math import ceil
 import numpy as np
 from numpy.typing import NDArray
 #
-from tqdm import tqdm
+from tqdm import tqdm  # type: ignore
 
 
 #
@@ -41,7 +41,7 @@ points_weight_type = np.float32  # Factor of points.
 #
 ###
 #
-NB_PTS_PARAMS: int = 4
+NB_PTS_PARAMS: int = 5
 
 #
 ### Default values for magic_methods_to_delegate. ###
@@ -300,9 +300,9 @@ class Point:
         """Setter for the x-coordinate, with type validation."""
 
         #
-        if not isinstance(value, int):  # type: ignore
-            #
-            raise TypeError("x-coordinate must be an integer.")
+        # if not isinstance(value, int):  # type: ignore
+        #     #
+        #     raise TypeError("x-coordinate must be an integer.")
 
         #
         self.data[0] = value
@@ -326,10 +326,10 @@ class Point:
     def y(self, value: int) -> None:
         """Setter for the y-coordinate, with type validation."""
 
-        #
-        if not isinstance(value, int):  # type: ignore
-            #
-            raise TypeError("y-coordinate must be an integer.")
+        # #
+        # if not isinstance(value, int):  # type: ignore
+        #     #
+        #     raise TypeError("y-coordinate must be an integer.")
 
         #
         self.data[1] = value
@@ -811,7 +811,7 @@ class LargePointsAreas:
     #
     ### Init function. Constructor. ###
     #
-    def __init__(self, sub_cluster_size: int = 100) -> None:
+    def __init__(self, sub_cluster_size: int = 20) -> None:
 
         #
         self.sub_cluster_size: int = sub_cluster_size
@@ -1379,16 +1379,72 @@ class Polygon:
         self.triangles: Optional[list[PointCluster]] = None
         self.triangle_areas: Optional[NDArray[np.float32]] = None
         self.total_area: float = 0.0
+        #
+        ### Grid for accelerating PIP queries with triangles. ###
+        #
+        self.triangle_grid: dict[str, list[int]] = {}
 
         #
         if len(self.boundary) > 0:
             #
             self._calculate_bounding_box()
-            self._precompute_edge_grid()
             #
             ### Pre-compute the triangulation for uniform point generation. ###
             #
             self._triangulate()
+            #
+            ### Build the spatial index for triangles. ###
+            #
+            self._build_triangle_grid()
+
+
+    #
+    ### Build a spatial grid index for triangles to accelerate PIP queries. ###
+    #
+    def _build_triangle_grid(self) -> None:
+
+        #
+        if self.triangles is None:
+            #
+            return
+
+        #
+        size: int = self.grid_context.sub_cluster_size
+
+        #
+        self.triangle_grid = {}
+
+        #
+        for idx, tri in enumerate(self.triangles):
+
+            #
+            all_x: NDArray[point_type] = tri.data[:3, 0]
+            all_y: NDArray[point_type] = tri.data[:3, 1]
+
+            #
+            min_x: float = np.min(all_x).item()
+            max_x: float = np.max(all_x).item()
+            min_y: float = np.min(all_y).item()
+            max_y: float = np.max(all_y).item()
+
+            #
+            min_sx: int = int(min_x // size)
+            max_sx: int = int(max_x // size)
+            min_sy: int = int(min_y // size)
+            max_sy: int = int(max_y // size)
+
+            #
+            for sx in range(min_sx, max_sx + 1):
+                #
+                for sy in range(min_sy, max_sy + 1):
+                    #
+                    key: str = f"{sx}_{sy}"
+                    #
+                    if key not in self.triangle_grid:
+                        #
+                        self.triangle_grid[key] = []
+                    #
+                    self.triangle_grid[key].append(idx)
 
 
     #
@@ -1412,143 +1468,11 @@ class Polygon:
 
 
     #
-    ### Pre-computation step to map grid cells to polygon edges. ###
-    #
-    def _precompute_edge_grid(self) -> None:
-        """
-        Iterates through each edge of the polygon, finds all grid cells it
-        crosses, and stores a reference to the edge in those cells.
-        """
+    @staticmethod
+    def cross_product(p1: Point, p2: Point, p3: Point) -> float:
+        """Calculates the 2D cross-product to determine orientation."""
 
-        #
-        print("Pre-computing polygon edge grid for fast lookups...")
-        #
-        for i in tqdm(range(len(self.boundary))):
-
-            #
-            p1 = self.boundary[i]
-            p2 = self.boundary[(i + 1) % len(self.boundary)] # Wrap around for the last edge
-
-            #
-            ### Use a line traversal algorithm to find all intersected grid cells. ###
-            #
-            crossed_cells = self._get_grid_cells_for_line(p1, p2)
-
-            #
-            for cell_key in crossed_cells:
-
-                #
-                if cell_key not in self.edge_grid:
-                    #
-                    self.edge_grid[cell_key] = []
-
-                #
-                self.edge_grid[cell_key].append(i)
-
-        #
-        print("Edge grid pre-computation complete.")
-
-
-    #
-    ### Digital Differential Analyzer (DDA) based algorithm to find crossed cells. ###
-    #
-    def _get_grid_cells_for_line(self, p1: Point, p2: Point) -> set[str]:
-
-        #
-        cells: set[str] = set()
-        #
-        # grid_size: int = self.grid_context.sub_cluster_size
-
-        #
-        x1: int = p1.x
-        y1: int = p1.y
-        x2: int = p2.x
-        y2: int = p2.y
-        #
-        dx: int = x2 - x1
-        dy: int = y2 - y1
-
-        #
-        steps: int = max(abs(dx), abs(dy))
-        #
-        if steps == 0:
-            #
-            key = self.grid_context.point_to_key(p1)
-            #
-            cells.add(key)
-            #
-            return cells
-
-        #
-        x_inc: float = dx / steps
-        y_inc: float = dy / steps
-        #
-        x: float = float(x1)
-        y: float = float(y1)
-
-        #
-        for _ in range(int(steps) + 1):
-
-            #
-            key = self.grid_context.point_to_key(Point(int(x), int(y)))
-            #
-            cells.add(key)
-            #
-            x += x_inc
-            y += y_inc
-
-        #
-        return cells
-
-    #
-    ### Helper for the ray casting intersection test. ###
-    #
-    def _ray_intersects_segment(self, point: Point, p1: Point, p2: Point) -> bool:
-
-        #
-        ### Assumes ray is cast horizontally to the right (positive x). ###
-        #
-
-        #
-        ### Ensure p1.y <= p2.y for consistency. ###
-        #
-        if p1.y > p2.y:
-            #
-            p1, p2 = p2, p1
-
-        #
-        ### Case 1: Point y is outside the edge's y-range. No intersection. ###
-        #
-        if point.y == p1.y or point.y > p2.y:
-            #
-            return False
-
-        #
-        ### Case 2: Point y is on the same level as the lower vertex. ###
-        ### This is a special case to avoid double counting when a ray hits a vertex. ###
-        ### We only count it if the ray is also to the left of the vertex. ###
-        #
-        if point.y == p2.y:
-            return point.x <= p2.x
-
-        #
-        ### Case 3: Edge is horizontal. Cannot intersect a horizontal ray unless co-linear. ###
-        #
-        if p1.y == p2.y:
-            return False
-
-        #
-        ### Case 4: General case. Use line equation to find intersection x. ###
-        ### Check if the point's x is to the left of the intersection point. ###
-        ### This avoids floating point issues by using cross-product. ###
-        ### (p2.y - p1.y) * (point.x - p1.x) - (p2.x - p1.x) * (point.y - p1.y) > 0 ###
-        #
-        if (p2.x - p1.x) * (point.y - p1.y) < (point.x - p1.x) * (p2.y - p1.y):
-            #
-            return True
-
-        #
-        return False
+        return (p2.x - p1.x) * (p3.y - p1.y) - (p2.y - p1.y) * (p3.x - p1.x)
 
 
     #
@@ -1556,72 +1480,62 @@ class Polygon:
     #
     def __contains__(self, point: Point) -> bool:
         """
-        Checks if a point is inside the polygon using a highly efficient
-        grid-accelerated ray casting algorithm.
+        Checks if a point is inside the polygon using a highly efficient algorithm.
 
         Usage: `my_point in my_polygon`
         """
 
         #
-        if len(self.boundary) < 3:
-            #
-            return False
-
-        #
-        ### Step 1: Trivial Rejection with Bounding Box Test. ###
+        ### Quick rejection using bounding box. ###
         #
         if not (self.min_x <= point.x <= self.max_x and self.min_y <= point.y <= self.max_y):
             #
             return False
 
         #
-        ### Step 2: Grid-Accelerated Ray Casting. ###
+        ### If triangulation failed, cannot proceed. ###
         #
-        intersections: int = 0
+        if self.triangles is None:
+            #
+            return False
 
         #
-        ### We only need to check edges that could possibly intersect our horizontal ray. ###
-        #
-        #
-        checked_edges: set[int] = set() # To avoid double-testing an edge if it's in multiple cells
-        #
-        gx_start: int = int(point.x // self.grid_context.sub_cluster_size)
-        gy: int = int(point.y // self.grid_context.sub_cluster_size)
-        gx_end: int = int(self.max_x // self.grid_context.sub_cluster_size)
+        epsilon: float = 1e-6  # Small tolerance for floating-point precision issues.
 
         #
-        gx: int
+        size: int = self.grid_context.sub_cluster_size
+        sx: int = int(point.x // size)
+        sy: int = int(point.y // size)
+        key: str = f"{sx}_{sy}"
+
         #
-        for gx in range(gx_start, gx_end + 1):
+        candidates: list[int] = self.triangle_grid.get(key, [])
+
+        #
+        ### Check if the point is inside any candidate triangle using orientation tests. ###
+        #
+        for idx in candidates:
+            #
+            triangle: PointCluster = self.triangles[idx]
+            v1: Point = triangle[0]
+            v2: Point = triangle[1]
+            v3: Point = triangle[2]
 
             #
-            cell_key: str = f"{gx}_{gy}"
-            #
-            if cell_key in self.edge_grid:
+            d1: float = self.cross_product(v1, v2, point)
+            d2: float = self.cross_product(v2, v3, point)
+            d3: float = self.cross_product(v3, v1, point)
 
+            #
+            ### Adjusted for CCW: inside if all >= -epsilon (includes boundary with tolerance). ###
+            #
+            if d1 >= -epsilon and d2 >= -epsilon and d3 >= -epsilon:
                 #
-                for edge_index in self.edge_grid[cell_key]:
-
-                    #
-                    if edge_index in checked_edges:
-                        #
-                        continue
-
-                    #
-                    checked_edges.add(edge_index)
-                    #
-                    p1 = self.boundary[edge_index]
-                    p2 = self.boundary[(edge_index + 1) % len(self.boundary)]
-
-                    #
-                    if self._ray_intersects_segment(point, p1, p2):
-                        #
-                        intersections += 1
+                return True
 
         #
-        ### Step 3: Odd number of intersections means the point is inside. ###
-        #
-        return intersections % 2 == 1
+        return False
+
 
     #
     ### Triangulate the polygon using the Ear Clipping algorithm. ###

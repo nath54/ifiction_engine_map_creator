@@ -57,11 +57,12 @@ def render_points_from_clusters(tx: int, ty: int, points: lp.PointCluster) -> No
     plt.xlabel("X-coordinate")
     plt.ylabel("Y-coordinate")
 
-    # #
-    # ### Set the plot limits based on the translation values. ###
-    # #
-    # plt.xlim(tx - 10, tx + 10)
-    # plt.ylim(ty - 10, ty + 10)
+    #
+    ### Set the plot limits based on the translation values. ###
+    #
+    plt.xlim(0, tx)
+    plt.ylim(0, ty)
+
 
     #
     ### Display the plot. ###
@@ -114,11 +115,12 @@ def render_points_with_colors_from_clusters(tx: int, ty: int, point_clusters: li
     plt.xlabel("X-coordinate")
     plt.ylabel("Y-coordinate")
 
-    # #
-    # ### Set the plot limits based on the translation values. ###
-    # #
-    # plt.xlim(tx - 10, tx + 10)
-    # plt.ylim(ty - 10, ty + 10)
+    #
+    ### Set the plot limits based on the translation values. ###
+    #
+    plt.xlim(0, tx)
+    plt.ylim(0, ty)
+
 
     #
     ### Add a legend and display the plot. ###
@@ -154,11 +156,12 @@ def render_points_from_points_areas(tx: int, ty: int, points: lp.LargePointsArea
     plt.xlabel("X-coordinate")
     plt.ylabel("Y-coordinate")
 
-    # #
-    # ### Set the plot limits based on the translation values. ###
-    # #
-    # plt.xlim(tx - 10, tx + 10)
-    # plt.ylim(ty - 10, ty + 10)
+    #
+    ### Set the plot limits based on the translation values. ###
+    #
+    plt.xlim(0, tx)
+    plt.ylim(0, ty)
+
 
     #
     ### Display the plot. ###
@@ -201,6 +204,7 @@ def render_points_with_colors_from_points_areas_with_polygons(tx: int, ty: int, 
             #
             x_coords = data[0]
             y_coords = data[1]
+            is_border_point = data[2]
 
             #
             x_coords_non_border: list[float] = []
@@ -226,7 +230,7 @@ def render_points_with_colors_from_points_areas_with_polygons(tx: int, ty: int, 
             #
             # plt.scatter(x_coords, y_coords, color=colors[i], label=f"Cluster {i+1}")
             plt.scatter(x_coords_non_border, y_coords_non_border, marker=".", color=colors[i], label=f"Cluster {i+1}")
-            plt.scatter(x_coords_border, y_coords_border, marker="x", color="black", label=f"Cluster {i+1}")
+            plt.scatter(x_coords_border, y_coords_border, marker=".", color="orange", label=f"Cluster {i+1}")
 
     #
     ### draw polygons. ###
@@ -243,7 +247,7 @@ def render_points_with_colors_from_points_areas_with_polygons(tx: int, ty: int, 
             x_coords = np.append(x_coords, x_coords[0])
             y_coords = np.append(y_coords, y_coords[0])
             #
-            plt.plot(x_coords, y_coords, color='black', linewidth=1)
+            plt.plot(x_coords, y_coords, color='orange', linewidth=1)
 
     #
     ### Set the title and labels. ###
@@ -252,11 +256,11 @@ def render_points_with_colors_from_points_areas_with_polygons(tx: int, ty: int, 
     plt.xlabel("X-coordinate")
     plt.ylabel("Y-coordinate")
 
-    # #
-    # ### Set the plot limits based on the translation values. ###
-    # #
-    # plt.xlim(tx - 10, tx + 10)
-    # plt.ylim(ty - 10, ty + 10)
+    #
+    ### Set the plot limits based on the translation values. ###
+    #
+    plt.xlim(0, tx)
+    plt.ylim(0, ty)
 
     #
     ### Add a legend and display the plot. ###
@@ -307,11 +311,12 @@ def render_only_polygons(tx: int, ty: int, polygons: list[lp.Polygon]) -> None:
     plt.xlabel("X-coordinate")
     plt.ylabel("Y-coordinate")
 
-    # #
-    # ### Set the plot limits based on the translation values. ###
-    # #
-    # plt.xlim(tx - 10, tx + 10)
-    # plt.ylim(ty - 10, ty + 10)
+    #
+    ### Set the plot limits based on the translation values. ###
+    #
+    plt.xlim(0, tx)
+    plt.ylim(0, ty)
+
 
     #
     ### Add a legend and display the plot. ###
@@ -330,7 +335,7 @@ def render_only_polygons(tx: int, ty: int, polygons: list[lp.Polygon]) -> None:
 def draw_heightmaps( arr: NDArray[np.floating] ) -> None:
 
     #
-    plt.imshow( arr, cmap="greyscale" )
+    plt.imshow( np.transpose( arr ) , cmap="grey" )
 
 
 #
@@ -360,4 +365,80 @@ def generate_random_colors(n: int) -> list[str]:
 
     #
     return [ generate_random_color() for _ in range(n) ]
+
+
+#
+###
+#
+def generate_2d_random_sinusoids(shape=(256, 256), num_sines=15, max_freq=4):
+    """
+    Generates a 2D numpy array as a sum of random sinusoids.
+
+    This creates a smooth, wave-like pattern often used in procedural
+    generation for textures like clouds, water, or marble.
+
+    Args:
+        shape (tuple): The (height, width) of the output array.
+        num_sines (int):    The number of sinusoids to sum. More sines create a
+                            more complex and detailed pattern.
+        max_freq (float):   The maximum frequency for the sinusoids. Higher values
+                            result in finer, smaller details.
+
+    Returns:
+        np.ndarray: A 2D numpy array containing the generated pattern.
+    """
+    # Create a coordinate grid over the domain [0, 1] x [0, 1]
+    height, width = shape
+    x = np.linspace(0, 1, width)
+    y = np.linspace(0, 1, height)
+    X, Y = np.meshgrid(x, y)
+
+    # Initialize the output array with zeros
+    Z = np.zeros(shape)
+
+    for _ in range(num_sines):
+        # 1. Generate random parameters for each sinusoid
+
+        # Random amplitude (strength of the wave)
+        amplitude = np.random.rand() + 0.5  # Avoid zero amplitude
+
+        # Random phase shift (moves the wave)
+        phase = np.random.rand() * 2 * np.pi
+
+        # Random frequency (number of oscillations across the grid)
+        freq = np.random.rand() * max_freq
+
+        # Random direction of the wave
+        angle = np.random.rand() * 2 * np.pi
+
+        # 2. Calculate wave vector components (kx, ky) from frequency and angle
+        # The 2*pi factor scales the frequency to the [0, 1] domain
+        kx = freq * np.cos(angle) * 2 * np.pi
+        ky = freq * np.sin(angle) * 2 * np.pi
+
+        # 3. Add the 2D sinusoid to the total field
+        # The equation is: A * sin(k_x * x + k_y * y + φ)
+        Z += amplitude * np.sin(kx * X + ky * Y + phase)
+
+    return Z
+
+
+
+
+#
+###
+#
+if __name__ == "__main__":
+
+    #
+    init_plt()
+
+    #
+    arr: NDArray[np.float32] = generate_2d_random_sinusoids(shape=(2048, 2048), num_sines=200, max_freq=100)
+
+    #
+    draw_heightmaps(arr)
+
+    #
+    quit_plt()
 
