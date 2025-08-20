@@ -89,7 +89,7 @@ def get_non_connected_neighbour_rooms(tx: int, ty: int, tz: int, doors: dict[roo
             for dz in dz_options:
 
                 #
-                if dx==0 and dy==0 and dz==0:
+                if abs(dx) + abs(dy) + abs(dz) != 1:
                     #
                     continue
 
@@ -199,7 +199,7 @@ def render_labyrinth_floor(z: int, tx: int, ty: int, tz: int, first_room: room_t
     room_size: int = 20
     wall_thick: int = 1
     door_size: int = 6
-    wall_with_door_size: int = max(room_size//2, min(0, (room_size - door_size) // 2))
+    wall_with_door_size: int = min(room_size//2, max(0, (room_size - door_size) // 2))
     #
     tsize: int = room_size // 4
     half_tsize: int = tsize // 2
@@ -349,7 +349,7 @@ def render_labyrinth_floor(z: int, tx: int, ty: int, tz: int, first_room: room_t
                 #
                 ### Wall with door. ###
                 #
-                rect_door: vec4_t = (ix + wall_with_door_size, iy, ix+room_size-wall_with_door_size, iy+wall_thick)
+                rect_door: vec4_t = (ix + wall_with_door_size, iy+room_size-wall_thick, ix+room_size-wall_with_door_size, iy+room_size)
                 #
                 draw.rectangle(rect_door, fill=room_color)
 
@@ -360,7 +360,7 @@ def render_labyrinth_floor(z: int, tx: int, ty: int, tz: int, first_room: room_t
                 #
                 ### Wall with door. ###
                 #
-                rect_door: vec4_t = (ix + wall_with_door_size, iy+room_size-wall_thick, ix+room_size-wall_with_door_size, iy+room_size)
+                rect_door: vec4_t = (ix + wall_with_door_size, iy, ix+room_size-wall_with_door_size, iy+wall_thick)
                 #
                 draw.rectangle(rect_door, fill=room_color)
 
