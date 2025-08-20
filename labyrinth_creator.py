@@ -6,6 +6,8 @@ from random import randint, choice
 from math import floor
 #
 from PIL import Image, ImageDraw
+#
+from tqdm import tqdm
 
 
 #
@@ -34,28 +36,29 @@ def render_labyrinth_floor(z: int, tx: int, ty: int, tz: int, first_room: room_t
     #
     margins: int = 10
     #
-    room_size: int = 20
-    wall_thick: int = 1
-    door_size: int = 6
+    room_size: int = 60
+    wall_thick: int = 2
+    door_size: int = 24
     wall_with_door_size: int = min(room_size//2, max(0, (room_size - door_size) // 2))
     #
-    tsize: int = room_size // 4
-    half_tsize: int = tsize // 2
+    tsize: int = 12
+    half_tsize: int = 6
     #
     first_room_color: color_t = (255, 0, 0)
-    end_room_color: color_t = (0, 0, 255)
+    end_room_color: color_t = (0, 255, 0)
     #
-    not_same_cluster_color: color_t = (200, 200, 200)
-    neutral_room_color: color_t = (250, 250, 250)
+    not_same_cluster_color: color_t = (50, 50, 50)
+    neutral_room_color: color_t = (10, 3, 6)
 
     #
     im_width: int = 2 * margins + tx * room_size
     im_height: int = 2 * margins + ty * room_size
     #
-    background_color: color_t = (255, 255, 255)
+    background_color: color_t = (0, 0, 0)
     #
-    triangle_color: color_t = (0, 0, 0)
-    wall_color: color_t = (0, 0, 0)
+    wall_color: color_t = (140, 50, 80)
+    #
+    triangle_color: color_t = (70, 60, 0)
 
     #
     image: Image.Image
@@ -125,6 +128,13 @@ def render_labyrinth_floor(z: int, tx: int, ty: int, tz: int, first_room: room_t
             #
             ix: int = margins + x * room_size
             iy: int = margins + y * room_size
+
+            #
+            t1x: int = ix + tsize
+            t1y: int = iy + tsize
+            #
+            t2x: int = ix + 5 * half_tsize
+            t2y: int = iy + tsize
 
             #
             west_room: room_t   = (room1[0] - 1 , room1[1]      , room1[2]      )
@@ -209,7 +219,7 @@ def render_labyrinth_floor(z: int, tx: int, ty: int, tz: int, first_room: room_t
                 #
                 ### Upper triangle. ###
                 #
-                triangle_coords: list[ vec2_t ] = [(ix + 2 * tsize, iy + 2 * tsize), (ix + 3 * tsize, iy + 2 * tsize), (ix + tsize + half_tsize, iy + tsize)]
+                triangle_coords: list[ vec2_t ] = [(t2x, t2y + tsize), (t2x + tsize, t2y + tsize), (t2x + half_tsize, t2y)]
                 #
                 draw.polygon(triangle_coords, fill=triangle_color)
 
@@ -220,7 +230,7 @@ def render_labyrinth_floor(z: int, tx: int, ty: int, tz: int, first_room: room_t
                 #
                 ### Lower triangle. ###
                 #
-                triangle_coords: list[ vec2_t ] = [(ix + tsize, iy + tsize), (ix + 2 * tsize, iy + 2 * tsize), (ix + tsize + half_tsize, iy + 2 * tsize)]
+                triangle_coords: list[ vec2_t ] = [(t1x, t1y), (t1x + tsize, t1y), (t1x + half_tsize, t1y + tsize)]
                 #
                 draw.polygon(triangle_coords, fill=triangle_color)
 
@@ -436,7 +446,6 @@ def init_adjacent_clusters(tx: int, ty: int, tz: int, rooms_clusters: dict[room_
 
     #
     return len(tot_edges)
-
 
 
 #
@@ -662,7 +671,7 @@ def create_labyrinth_algo_2(tx: int, ty: int, tz: int = 1, begin_at_center: bool
     #
     n_clusters: int = init_clusters(tx=tx, ty=ty, tz=tz, rooms_clusters=rooms_clusters, rooms_of_cluster=rooms_of_cluster, rooms_to_avoid=rooms_to_avoid)
     #
-    tot_doors = init_adjacent_clusters(tx=tx, ty=ty, tz=tz, rooms_clusters=rooms_clusters, rooms_to_avoid=rooms_to_avoid, adjacents_clusters=adjacents_clusters)
+    _tot_doors = init_adjacent_clusters(tx=tx, ty=ty, tz=tz, rooms_clusters=rooms_clusters, rooms_to_avoid=rooms_to_avoid, adjacents_clusters=adjacents_clusters)
     #
     ndoors: int = 0
     #
@@ -670,6 +679,9 @@ def create_labyrinth_algo_2(tx: int, ty: int, tz: int = 1, begin_at_center: bool
     end_room: room_t
     #
     first_room, end_room = get_first_and_last_rooms(tx=tx, ty=ty, tz=tz, begin_at_center=begin_at_center, random_end=random_end)
+
+    #
+    pbar = tqdm(total=n_clusters)
 
     #
     while n_clusters > 1:
@@ -690,7 +702,9 @@ def create_labyrinth_algo_2(tx: int, ty: int, tz: int = 1, begin_at_center: bool
         #
         n_clusters = merge_clusters(rooms_clusters=rooms_clusters, rooms_of_cluster=rooms_of_cluster, n_clusters=n_clusters, room1=room1, room2=room2)
         #
-        print(f"ndoors = {ndoors} / {tot_doors} | n_clusters = {n_clusters}")
+        pbar.update(n=1)
+        #
+        # print(f"ndoors = {ndoors} / {tot_doors} | n_clusters = {n_clusters}")
 
     #
     render_labyrinth(tx=tx, ty=ty, tz=tz, first_room=first_room, end_room=end_room, rooms_clusters=rooms_clusters, doors=doors, rooms_to_avoid=rooms_to_avoid)
@@ -707,7 +721,7 @@ if __name__ == "__main__":
     create_labyrinth_algo_2(
         tx=20,
         ty=20,
-        tz=1,
+        tz=5,
         begin_at_center=False,
         random_end=False,
         avoid_cycles=True,
