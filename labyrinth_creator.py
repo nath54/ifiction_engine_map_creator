@@ -1,4 +1,5 @@
-
+#
+from typing import Any
 #
 from random import randint, choice
 #
@@ -15,179 +16,16 @@ output_path: str = "tests_lab/"
 room_t = tuple[int, int, int]
 color_t = tuple[int, int, int]
 vec2_t = tuple[int, int]
+vec3_t = tuple[int, int, int]
 vec4_t = tuple[int, int, int, int]
 
 
 #
-def random_room(tx: int, ty: int, tz: int) -> room_t:
-    #
-    return (
-        randint(0, tx-1),
-        randint(0, ty-1),
-        randint(0, tz-1)
-    )
-
-
-#
-def sort_rooms(room1: room_t, room2: room_t) -> tuple[room_t, room_t]:
-    #
-    if room1 <= room2:
-        #
-        return (room1, room2)
-    #
-    return (room2, room1)
-
-
-#
-def get_first_and_last_rooms(tx: int, ty: int, tz: int, begin_at_center: bool = False, random_end: bool = False) -> tuple[room_t, room_t]:
-
-    #
-    first_room: room_t = (0, 0, 0)
-    #
-    if begin_at_center:
-        #
-        first_room = (floor(tx/2), floor(ty/2), floor(tz/2))
-
-    #
-    end_room: room_t = (tx - 1, ty - 1, tz - 1)
-    #
-    if random_end:
-
-        #
-        end_room = random_room(tx=tx, ty=ty, tz=tz)
-        #
-        while end_room == first_room:
-            #
-            end_room = random_room(tx=tx, ty=ty, tz=tz)
-
-    #
-    return (first_room, end_room)
-
-
-#
-def get_non_connected_neighbour_rooms(tx: int, ty: int, tz: int, doors: dict[room_t, set[room_t]], rroom: room_t) -> list[room_t]:
-
-    #
-    dx_options: list[int] = [0]
-    dy_options: list[int] = [0]
-    dz_options: list[int] = [0]
-    #
-    if rroom[0] > 0: dx_options.append(-1)
-    if rroom[0] < tx - 1: dx_options.append(1)
-    if rroom[1] > 0: dy_options.append(-1)
-    if rroom[1] < ty - 1: dy_options.append(1)
-    if rroom[2] > 0: dz_options.append(-1)
-    if rroom[2] < tz - 1: dz_options.append(1)
-
-    #
-    options: list[room_t] = []
-    #
-    for dx in dx_options:
-        #
-        for dy in dy_options:
-            #
-            for dz in dz_options:
-
-                #
-                if abs(dx) + abs(dy) + abs(dz) != 1:
-                    #
-                    continue
-
-                #
-                nroom: room_t = (rroom[0]+dx, rroom[1]+dy, rroom[2]+dz)
-
-                #
-                if check_door(doors=doors, room1=rroom, room2=nroom):
-                    #
-                    continue
-
-                #
-                options.append( nroom )
-
-    #
-    return options
-
-
-#
-def check_door(doors: dict[room_t, set[room_t]], room1: room_t, room2: room_t) -> bool:
-
-    #
-    room1, room2 = sort_rooms(room1=room1, room2=room2)
-
-    #
-    if room1 not in doors:
-        #
-        return False
-
-    #
-    return room2 in doors[room1]
-
-
-#
-def add_door(doors: dict[room_t, set[room_t]], room1: room_t, room2: room_t) -> None:
-
-    #
-    room1, room2 = sort_rooms(room1=room1, room2=room2)
-
-    #
-    if room1 not in doors:
-        #
-        doors[room1] = set()
-
-    #
-    doors[room1].add( room2 )
-
-
-#
-def init_clusters(tx: int, ty: int, tz: int, rooms_clusters: dict[room_t, int], rooms_of_cluster: dict[int, set[room_t]]) -> int:
-
-    #
-    n_clusters: int = 0
-    #
-    for x in range(tx):
-        #
-        for y in range(ty):
-            #
-            for z in range(tz):
-                #
-                rroom: room_t = (x, y, z)
-                #
-                rooms_clusters[rroom] = n_clusters
-                #
-                rooms_of_cluster[n_clusters] = set([rroom])
-                #
-                n_clusters += 1
-
-    #
-    return n_clusters
-
-
-#
-def merge_clusters(rooms_clusters: dict[room_t, int], rooms_of_cluster: dict[int, set[room_t]], n_clusters: int, room1: room_t, room2: room_t) -> int:
-
-    #
-    final_cluster: int = min( rooms_clusters[room1], rooms_clusters[room2] )
-    #
-    loosing_cluster: int = max( rooms_clusters[room1], rooms_clusters[room2] )
-
-    #
-    if final_cluster == loosing_cluster:
-        #
-        return n_clusters
-
-    #
-    for rroom in rooms_of_cluster[loosing_cluster]:
-
-        #
-        rooms_clusters[rroom] = final_cluster
-        #
-        rooms_of_cluster[final_cluster].add(rroom)
-
-    #
-    del rooms_of_cluster[loosing_cluster]
-
-    #
-    return (n_clusters - 1)
+MANHATAN_DIRECTIONS: list[vec3_t] = [
+    (1, 0, 0), (-1, 0, 0),
+    (0, 1, 0), (0, -1, 0),
+    (0, 0, 1), (0, 0, -1)
+]
 
 
 #
@@ -410,7 +248,342 @@ def render_labyrinth(tx: int, ty: int, tz: int, first_room: room_t, end_room: ro
 
 
 #
-def create_labyrinth(tx: int, ty: int, tz: int = 1, begin_at_center: bool = False, random_end: bool = False, avoid_cycles: bool = False, rooms_to_avoid: set[room_t] = set()) -> None:
+def random_room(tx: int, ty: int, tz: int) -> room_t:
+    #
+    return (
+        randint(0, tx-1),
+        randint(0, ty-1),
+        randint(0, tz-1)
+    )
+
+
+#
+def sort_things(thing1: Any, thing2: Any) -> tuple[Any, Any]:
+    #
+    if thing1 <= thing2:
+        #
+        return (thing1, thing2)
+    #
+    return (thing2, thing1)
+
+
+#
+def get_first_and_last_rooms(tx: int, ty: int, tz: int, begin_at_center: bool = False, random_end: bool = False) -> tuple[room_t, room_t]:
+
+    #
+    first_room: room_t = (0, 0, 0)
+    #
+    if begin_at_center:
+        #
+        first_room = (floor(tx/2), floor(ty/2), floor(tz/2))
+
+    #
+    end_room: room_t = (tx - 1, ty - 1, tz - 1)
+    #
+    if random_end:
+
+        #
+        end_room = random_room(tx=tx, ty=ty, tz=tz)
+        #
+        while end_room == first_room:
+            #
+            end_room = random_room(tx=tx, ty=ty, tz=tz)
+
+    #
+    return (first_room, end_room)
+
+
+#
+def get_non_connected_neighbour_rooms(tx: int, ty: int, tz: int, doors: dict[room_t, set[room_t]], rroom: room_t) -> list[room_t]:
+
+    #
+    dx_options: list[int] = [0]
+    dy_options: list[int] = [0]
+    dz_options: list[int] = [0]
+    #
+    if rroom[0] > 0: dx_options.append(-1)
+    if rroom[0] < tx - 1: dx_options.append(1)
+    if rroom[1] > 0: dy_options.append(-1)
+    if rroom[1] < ty - 1: dy_options.append(1)
+    if rroom[2] > 0: dz_options.append(-1)
+    if rroom[2] < tz - 1: dz_options.append(1)
+
+    #
+    options: list[room_t] = []
+    #
+    for dx in dx_options:
+        #
+        for dy in dy_options:
+            #
+            for dz in dz_options:
+
+                #
+                if abs(dx) + abs(dy) + abs(dz) != 1:
+                    #
+                    continue
+
+                #
+                nroom: room_t = (rroom[0]+dx, rroom[1]+dy, rroom[2]+dz)
+
+                #
+                if check_door(doors=doors, room1=rroom, room2=nroom):
+                    #
+                    continue
+
+                #
+                options.append( nroom )
+
+    #
+    return options
+
+
+#
+def check_door(doors: dict[room_t, set[room_t]], room1: room_t, room2: room_t) -> bool:
+
+    #
+    room1, room2 = sort_things(thing1=room1, thing2=room2)
+
+    #
+    if room1 not in doors:
+        #
+        return False
+
+    #
+    return room2 in doors[room1]
+
+
+#
+def add_door(doors: dict[room_t, set[room_t]], room1: room_t, room2: room_t) -> None:
+
+    #
+    room1, room2 = sort_things(thing1=room1, thing2=room2)
+
+    #
+    if room1 not in doors:
+        #
+        doors[room1] = set()
+
+    #
+    doors[room1].add( room2 )
+
+
+#
+def init_clusters(tx: int, ty: int, tz: int, rooms_clusters: dict[room_t, int], rooms_of_cluster: dict[int, set[room_t]], rooms_to_avoid: set[room_t]) -> int:
+
+    #
+    n_clusters: int = 0
+    #
+    for x in range(tx):
+        #
+        for y in range(ty):
+            #
+            for z in range(tz):
+                #
+                rroom: room_t = (x, y, z)
+                #
+                if rroom in rooms_to_avoid:
+                    #
+                    continue
+                #
+                rooms_clusters[rroom] = n_clusters
+                #
+                rooms_of_cluster[n_clusters] = set([rroom])
+                #
+                n_clusters += 1
+
+    #
+    return n_clusters
+
+
+#
+def init_adjacent_clusters(tx: int, ty: int, tz: int, rooms_clusters: dict[room_t, int], rooms_to_avoid: set[room_t], adjacents_clusters: dict[int, dict[int, dict[room_t, set[room_t]]]]) -> int:
+
+    #
+    tot_edges: set[tuple[room_t, room_t]] = set()
+
+    #
+    for x in range(tx):
+        #
+        for y in range(ty):
+            #
+            for z in range(tz):
+
+                #
+                for dx, dy, dz in MANHATAN_DIRECTIONS:
+
+                    #
+                    room1: room_t = (x, y, z)
+                    room2: room_t = (x+dx, y+dy, z+dz)
+
+                    #
+                    if room2[0] < 0 or room2[1] < 0 or room2[2] < 0 or room2[0] >= tx or room2[1] >= ty or room2[2] >= tz or room2 in rooms_to_avoid:
+                        #
+                        continue
+
+                    #
+                    cluster1: int = rooms_clusters[room1]
+                    cluster2: int = rooms_clusters[room2]
+
+                    #
+                    add_adjacents_clusters(adjacents_clusters=adjacents_clusters, cluster1=cluster1, cluster2=cluster2, room_cluster1=room1, room_cluster2=room2)
+
+                    #
+                    edges: tuple[room_t, room_t] = sort_things(thing1=room1, thing2=room2)
+                    #
+                    if edges not in tot_edges:
+                        #
+                        tot_edges.add(edges)
+
+    #
+    return len(tot_edges)
+
+
+
+#
+def merge_clusters(rooms_clusters: dict[room_t, int], rooms_of_cluster: dict[int, set[room_t]], n_clusters: int, room1: room_t, room2: room_t) -> int:
+
+    #
+    final_cluster: int = min( rooms_clusters[room1], rooms_clusters[room2] )
+    #
+    loosing_cluster: int = max( rooms_clusters[room1], rooms_clusters[room2] )
+
+    #
+    if final_cluster == loosing_cluster:
+        #
+        return n_clusters
+
+    #
+    for rroom in rooms_of_cluster[loosing_cluster]:
+
+        #
+        rooms_clusters[rroom] = final_cluster
+        #
+        rooms_of_cluster[final_cluster].add(rroom)
+
+    #
+    del rooms_of_cluster[loosing_cluster]
+
+    #
+    return (n_clusters - 1)
+
+
+#
+def add_adjacents_clusters(adjacents_clusters: dict[int, dict[int, dict[room_t, set[room_t]]]], cluster1: int, cluster2: int, room_cluster1: room_t, room_cluster2: room_t) -> None:
+
+    #
+    ### Depth 0. ###
+    #
+    if cluster1 not in adjacents_clusters:
+        #
+        adjacents_clusters[cluster1] = {}
+    #
+    if cluster2 not in adjacents_clusters:
+        #
+        adjacents_clusters[cluster2] = {}
+
+    #
+    ### Depth 1. ###
+    #
+    if cluster2 not in adjacents_clusters[cluster1]:
+        #
+        adjacents_clusters[cluster1][cluster2] = {}
+    #
+    if cluster1 not in adjacents_clusters[cluster2]:
+        #
+        adjacents_clusters[cluster2][cluster1] = {}
+
+    #
+    ### Depth 2. ###
+    #
+    if room_cluster1 not in adjacents_clusters[cluster1][cluster2]:
+        #
+        adjacents_clusters[cluster1][cluster2][room_cluster1] = set()
+    #
+    if room_cluster2 not in adjacents_clusters[cluster2][cluster1]:
+        #
+        adjacents_clusters[cluster2][cluster1][room_cluster2] = set()
+
+    #
+    ### Depth 3. ###
+    #
+    adjacents_clusters[cluster1][cluster2][room_cluster1].add( room_cluster2 )
+    #
+    adjacents_clusters[cluster2][cluster1][room_cluster2].add( room_cluster1 )
+
+
+def merge_adjacents_clusters(adjacents_clusters: dict[int, dict[int, dict[room_t, set[room_t]]]], final_cluster: int, loosing_cluster: int) -> None:
+    """
+    Merge two clusters in the adjacents_clusters data structure.
+    All adjacencies of loosing_cluster are transferred to final_cluster.
+    """
+
+    #
+    if final_cluster == loosing_cluster:
+        #
+        return
+
+    # Get all clusters adjacent to the loosing cluster
+    # Use list() to avoid modification during iteration
+    adjacent_to_loosing: list[int] = list(adjacents_clusters[loosing_cluster].keys())
+
+    for cluster3 in adjacent_to_loosing:
+        #
+        if cluster3 == final_cluster:
+            #
+            continue
+
+        # Transfer all room-to-room adjacencies from loosing_cluster to final_cluster
+        for room_cluster2 in list(adjacents_clusters[loosing_cluster][cluster3].keys()):
+            #
+            for room_cluster3 in list(adjacents_clusters[loosing_cluster][cluster3][room_cluster2]):
+                #
+                add_adjacents_clusters(
+                    adjacents_clusters=adjacents_clusters,
+                    cluster1=final_cluster,
+                    cluster2=cluster3,
+                    room_cluster1=room_cluster2,
+                    room_cluster2=room_cluster3
+                )
+
+    # Now safely remove all references to loosing_cluster
+    # First pass: collect all clusters that reference loosing_cluster
+    clusters_to_clean: list[int] = []
+    for cluster3 in adjacent_to_loosing:
+        if cluster3 in adjacents_clusters:  # Check if still exists
+            #
+            clusters_to_clean.append(cluster3)
+
+    # Second pass: remove references to loosing_cluster
+    for cluster3 in clusters_to_clean:
+        #
+        if cluster3 in adjacents_clusters and loosing_cluster in adjacents_clusters[cluster3]:
+            #
+            del adjacents_clusters[cluster3][loosing_cluster]
+
+    # Finally, remove the loosing_cluster entirely
+    if loosing_cluster in adjacents_clusters:
+        #
+        del adjacents_clusters[loosing_cluster]
+
+
+#
+def find_random_clusters_to_merge(adjacents_clusters: dict[int, dict[int, dict[room_t, set[room_t]]]]) -> tuple[int, int, room_t, room_t]:
+
+    #
+    cluster1: int = choice(list(adjacents_clusters.keys()))
+    cluster2: int = choice(list(adjacents_clusters[cluster1].keys()))
+    #
+    cluster1, cluster2 = sort_things(thing1=cluster1, thing2=cluster2)
+    #
+    room_cluster1: room_t = choice(list(adjacents_clusters[cluster1][cluster2].keys()))
+    room_cluster2: room_t = choice(list(adjacents_clusters[cluster1][cluster2][room_cluster1]))
+
+    #
+    return (cluster1, cluster2, room_cluster1, room_cluster2)
+
+
+#
+def create_labyrinth_algo_1(tx: int, ty: int, tz: int = 1, begin_at_center: bool = False, random_end: bool = False, avoid_cycles: bool = False, rooms_to_avoid: set[room_t] = set()) -> None:
 
     #
     doors: dict[room_t, set[room_t]] = {}
@@ -419,7 +592,7 @@ def create_labyrinth(tx: int, ty: int, tz: int = 1, begin_at_center: bool = Fals
     #
     rooms_of_cluster: dict[int, set[room_t]] = {}
     #
-    n_clusters: int = init_clusters(tx=tx, ty=ty, tz=tz, rooms_clusters=rooms_clusters, rooms_of_cluster=rooms_of_cluster)
+    n_clusters: int = init_clusters(tx=tx, ty=ty, tz=tz, rooms_clusters=rooms_clusters, rooms_of_cluster=rooms_of_cluster, rooms_to_avoid=rooms_to_avoid)
     #
     ndoors: int = 0
     #
@@ -476,13 +649,62 @@ def create_labyrinth(tx: int, ty: int, tz: int = 1, begin_at_center: bool = Fals
 
 
 #
+def create_labyrinth_algo_2(tx: int, ty: int, tz: int = 1, begin_at_center: bool = False, random_end: bool = False, avoid_cycles: bool = False, rooms_to_avoid: set[room_t] = set()) -> None:
+
+    #
+    doors: dict[room_t, set[room_t]] = {}
+    #
+    rooms_clusters: dict[room_t, int] = {}
+    #
+    rooms_of_cluster: dict[int, set[room_t]] = {}
+    #
+    adjacents_clusters: dict[int, dict[int, dict[room_t, set[room_t]]]] = {}
+    #
+    n_clusters: int = init_clusters(tx=tx, ty=ty, tz=tz, rooms_clusters=rooms_clusters, rooms_of_cluster=rooms_of_cluster, rooms_to_avoid=rooms_to_avoid)
+    #
+    tot_doors = init_adjacent_clusters(tx=tx, ty=ty, tz=tz, rooms_clusters=rooms_clusters, rooms_to_avoid=rooms_to_avoid, adjacents_clusters=adjacents_clusters)
+    #
+    ndoors: int = 0
+    #
+    first_room: room_t
+    end_room: room_t
+    #
+    first_room, end_room = get_first_and_last_rooms(tx=tx, ty=ty, tz=tz, begin_at_center=begin_at_center, random_end=random_end)
+
+    #
+    while n_clusters > 1:
+
+        #
+        room1: room_t
+        room2: room_t
+
+        #
+        cluster1, cluster2, room1, room2 = find_random_clusters_to_merge(adjacents_clusters=adjacents_clusters)
+
+        #
+        add_door(doors=doors, room1=room1, room2=room2)
+        #
+        ndoors += 1
+        #
+        merge_adjacents_clusters(adjacents_clusters=adjacents_clusters, final_cluster=cluster1, loosing_cluster=cluster2)
+        #
+        n_clusters = merge_clusters(rooms_clusters=rooms_clusters, rooms_of_cluster=rooms_of_cluster, n_clusters=n_clusters, room1=room1, room2=room2)
+        #
+        print(f"ndoors = {ndoors} / {tot_doors} | n_clusters = {n_clusters}")
+
+    #
+    render_labyrinth(tx=tx, ty=ty, tz=tz, first_room=first_room, end_room=end_room, rooms_clusters=rooms_clusters, doors=doors, rooms_to_avoid=rooms_to_avoid)
+
+
+
+#
 if __name__ == "__main__":
 
     #
     rooms_to_avoid: list[room_t] = []
 
     #
-    create_labyrinth(
+    create_labyrinth_algo_2(
         tx=20,
         ty=20,
         tz=1,
