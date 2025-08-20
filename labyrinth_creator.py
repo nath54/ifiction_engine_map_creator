@@ -316,7 +316,7 @@ def render_labyrinth_floor(z: int, tx: int, ty: int, tz: int, first_room: room_t
             #
             ### Draw room floor. ###
             #
-            room_rect_coords: vec4_t = (ix+wall_thick, iy+wall_thick, ix+room_size-2*wall_thick, iy+room_size-2*wall_thick)
+            room_rect_coords: vec4_t = (ix+wall_thick, iy+wall_thick, ix+room_size-wall_thick, iy+room_size-wall_thick)
             #
             draw.rectangle(room_rect_coords, fill=room_color)
 
