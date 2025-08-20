@@ -520,6 +520,7 @@ def add_adjacents_clusters(adjacents_clusters: dict[int, dict[int, dict[room_t, 
     adjacents_clusters[cluster2][cluster1][room_cluster2].add( room_cluster1 )
 
 
+#
 def merge_adjacents_clusters(adjacents_clusters: dict[int, dict[int, dict[room_t, set[room_t]]]], final_cluster: int, loosing_cluster: int) -> None:
     """
     Merge two clusters in the adjacents_clusters data structure.
@@ -656,6 +657,9 @@ def create_labyrinth_algo_1(tx: int, ty: int, tz: int = 1, begin_at_center: bool
     #
     render_labyrinth(tx=tx, ty=ty, tz=tz, first_room=first_room, end_room=end_room, rooms_clusters=rooms_clusters, doors=doors, rooms_to_avoid=rooms_to_avoid)
 
+    #
+    labyrinth_to_ifiction(tx=tx, ty=ty, tz=tz, doors=doors)
+
 
 #
 def create_labyrinth_algo_2(tx: int, ty: int, tz: int = 1, begin_at_center: bool = False, random_end: bool = False, avoid_cycles: bool = False, rooms_to_avoid: set[room_t] = set()) -> None:
@@ -709,6 +713,15 @@ def create_labyrinth_algo_2(tx: int, ty: int, tz: int = 1, begin_at_center: bool
     #
     render_labyrinth(tx=tx, ty=ty, tz=tz, first_room=first_room, end_room=end_room, rooms_clusters=rooms_clusters, doors=doors, rooms_to_avoid=rooms_to_avoid)
 
+    #
+    labyrinth_to_ifiction(tx=tx, ty=ty, tz=tz, doors=doors)
+
+
+#
+def labyrinth_to_ifiction(tx: int, ty: int, tz: int, doors: dict[room_t, set[room_t]]) -> None:
+
+    # TODO
+    pass
 
 
 #
