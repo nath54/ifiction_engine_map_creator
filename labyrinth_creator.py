@@ -792,6 +792,9 @@ def labyrinth_to_ifiction(tx: int, ty: int, tz: int, doors: dict[room_t, set[roo
     doors_to_append: set[tuple[room_t, room_t]] = set()
 
     #
+    doors_ids: int = 0
+
+    #
     for x in range(tx):
         #
         for y in range(ty):
@@ -822,10 +825,12 @@ def labyrinth_to_ifiction(tx: int, ty: int, tz: int, doors: dict[room_t, set[roo
         #
         door_id: str = get_door_id(room1=room1, room2=room2)
         #
+        doors_ids += 1
+        #
         jsongame["things"][door_id] = {
             "type": "object",
             "id": door_id,
-            "name": "door",
+            "name": f"door {doors_ids}",
             "description": "a simple door",
             "attributes": ["openable"]
         }
