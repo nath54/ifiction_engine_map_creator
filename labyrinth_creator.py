@@ -1,7 +1,10 @@
 #
 from typing import Any
 #
-from random import randint, choice
+import json
+#
+from random import randint
+from random import choice as rchoice
 #
 from math import floor
 #
@@ -580,13 +583,13 @@ def merge_adjacents_clusters(adjacents_clusters: dict[int, dict[int, dict[room_t
 def find_random_clusters_to_merge(adjacents_clusters: dict[int, dict[int, dict[room_t, set[room_t]]]]) -> tuple[int, int, room_t, room_t]:
 
     #
-    cluster1: int = choice(list(adjacents_clusters.keys()))
-    cluster2: int = choice(list(adjacents_clusters[cluster1].keys()))
+    cluster1: int = rchoice(list(adjacents_clusters.keys()))
+    cluster2: int = rchoice(list(adjacents_clusters[cluster1].keys()))
     #
     cluster1, cluster2 = sort_things(thing1=cluster1, thing2=cluster2)
     #
-    room_cluster1: room_t = choice(list(adjacents_clusters[cluster1][cluster2].keys()))
-    room_cluster2: room_t = choice(list(adjacents_clusters[cluster1][cluster2][room_cluster1]))
+    room_cluster1: room_t = rchoice(list(adjacents_clusters[cluster1][cluster2].keys()))
+    room_cluster2: room_t = rchoice(list(adjacents_clusters[cluster1][cluster2][room_cluster1]))
 
     #
     return (cluster1, cluster2, room_cluster1, room_cluster2)
@@ -631,7 +634,7 @@ def create_labyrinth_algo_1(tx: int, ty: int, tz: int = 1, begin_at_center: bool
             continue
 
         #
-        room2: room_t = choice(options)
+        room2: room_t = rchoice(options)
 
         #
         if room2 in rooms_to_avoid:
@@ -658,7 +661,7 @@ def create_labyrinth_algo_1(tx: int, ty: int, tz: int = 1, begin_at_center: bool
     render_labyrinth(tx=tx, ty=ty, tz=tz, first_room=first_room, end_room=end_room, rooms_clusters=rooms_clusters, doors=doors, rooms_to_avoid=rooms_to_avoid)
 
     #
-    labyrinth_to_ifiction(tx=tx, ty=ty, tz=tz, doors=doors)
+    labyrinth_to_ifiction(tx=tx, ty=ty, tz=tz, doors=doors, first_room=first_room, end_room=end_room)
 
 
 #
@@ -714,14 +717,150 @@ def create_labyrinth_algo_2(tx: int, ty: int, tz: int = 1, begin_at_center: bool
     render_labyrinth(tx=tx, ty=ty, tz=tz, first_room=first_room, end_room=end_room, rooms_clusters=rooms_clusters, doors=doors, rooms_to_avoid=rooms_to_avoid)
 
     #
-    labyrinth_to_ifiction(tx=tx, ty=ty, tz=tz, doors=doors)
+    labyrinth_to_ifiction(tx=tx, ty=ty, tz=tz, doors=doors, first_room=first_room, end_room=end_room)
 
 
 #
-def labyrinth_to_ifiction(tx: int, ty: int, tz: int, doors: dict[room_t, set[room_t]]) -> None:
+def get_room_id(rroom: room_t) -> str:
+    #
+    return f"room_{rroom[0]}_{rroom[1]}_{rroom[2]}"
 
-    # TODO
-    pass
+
+#
+def get_door_id(room1: room_t, room2: room_t) -> str:
+    #
+    room1, room2 = sort_things(thing1=room1, thing2=room2)
+    #
+    return f"door_{room1[0]}_{room1[1]}_{room1[2]}_to_{room2[0]}_{room2[1]}_{room2[2]}"
+
+
+#
+def get_room_directions(room1: room_t, room2: room_t) -> tuple[str, str]:
+    #
+    dx: int = room1[0] - room2[0]
+    dy: int = room1[1] - room2[1]
+    dz: int = room1[2] - room2[2]
+    #
+    if dx == 1:
+        #
+        return "west", "east"
+    #
+    elif dx == -1:
+        #
+        return "east", "west"
+    #
+    elif dy == 1:
+        #
+        return "south", "north"
+    #
+    elif dy == -1:
+        #
+        return "north", "south"
+    #
+    elif dz == 1:
+        #
+        return "down", "up"
+    #
+    return "up", "down"
+
+
+#
+def labyrinth_to_ifiction(tx: int, ty: int, tz: int, doors: dict[room_t, set[room_t]], first_room: room_t, end_room: room_t) -> None:
+
+    jsongame: dict[str, Any] = {
+        "game_name": "Basic Test 1",
+        "game_description": "Simple test",
+        "game_author": "Nathan Cerisara (aka github.com/nath54)",
+        "things": {
+            "player1": {
+                "type": "player",
+                "id": "player1",
+                "name": "Player",
+                "room": "room1",
+                "inventory": {},
+                "missions": []
+            },
+        },
+        "rooms": {
+        },
+        "variables": {},
+        "players": ["player1"],
+        "nb_turns": 0
+    }
+
+    #
+    doors_to_append: set[tuple[room_t, room_t]] = set()
+
+    #
+    for x in range(tx):
+        #
+        for y in range(ty):
+            #
+            for z in range(tz):
+                #
+                rroom: room_t = (x, y, z)
+                #
+                room_id: str = get_room_id(rroom=rroom)
+                #
+                jsongame["rooms"][room_id] = {
+                    "room_name": "room",
+                    "description": "a simple empty room",
+                    "accesses": [],
+                    "things_inside": {}
+                }
+                #
+                if rroom in doors:
+                    #
+                    for nrooms in doors[rroom]:
+                        #
+                        doors_to_append.add(
+                            sort_things(thing1=rroom, thing2=nrooms)
+                        )
+
+    #
+    for room1, room2 in doors_to_append:
+        #
+        door_id: str = get_door_id(room1=room1, room2=room2)
+        #
+        jsongame["things"][door_id] = {
+            "type": "object",
+            "id": door_id,
+            "name": "door",
+            "description": "a simple door",
+            "attributes": ["openable"]
+        }
+        #
+        room1_id: str = get_room_id(rroom=room1)
+        room2_id: str = get_room_id(rroom=room2)
+        #
+        dir_to_room2, dir_to_room1 = get_room_directions(room1=room1, room2=room2)
+
+        #
+        jsongame["rooms"][room1_id]["things_inside"][door_id] = 1
+        jsongame["rooms"][room2_id]["things_inside"][door_id] = 1
+        #
+        jsongame["rooms"][room1_id]["accesses"].append( {"thing_id": door_id, "direction": dir_to_room2, "links_to": room2_id} )
+        jsongame["rooms"][room2_id]["accesses"].append( {"thing_id": door_id, "direction": dir_to_room1, "links_to": room1_id} )
+
+    #
+    ### Add player to first room. ###
+    #
+    first_room_id: str = get_room_id(rroom=first_room)
+    #
+    jsongame["things"]["player1"]["room"] = first_room_id
+    jsongame["rooms"][first_room_id]["things_inside"]["player1"] = 1
+
+    #
+    ### Indicate the end room. ###
+    #
+    end_room_id: str = get_room_id(rroom=end_room)
+    #
+    jsongame["rooms"][end_room_id]["description"] = "This is the final round. You reached the end of the labyrinth."
+
+    #
+    with open("ifiction_save/game.json", "w", encoding="utf-8") as f:
+        #
+        json.dump(obj=jsongame, fp=f)
 
 
 #
